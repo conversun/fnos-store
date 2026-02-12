@@ -1,0 +1,14 @@
+appname         = jellyfin
+version         = 10.11.6
+display_name    = Jellyfin
+platform        = x86
+maintainer      = Jellyfin Contributors
+maintainer_url  = https://jellyfin.org
+distributor     = conversun
+distributor_url = https://github.com/conversun/fnos-apps
+desktop_uidir   = ui
+desktop_applaunchname = jellyfin.Application
+service_port    = 8097
+desc            = Jellyfin Media Server
+source          = thirdparty
+checksum        = ghi789mock

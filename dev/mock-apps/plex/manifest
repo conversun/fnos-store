@@ -1,0 +1,15 @@
+appname         = plexmediaserver
+version         = 1.42.2.10156
+display_name    = Plex
+platform        = arm
+maintainer      = Plex Inc.
+maintainer_url  = https://plex.tv
+distributor     = conversun
+distributor_url = https://github.com/conversun/fnos-apps
+desktop_uidir   = ui
+desktop_applaunchname = plexmediaserver.Application
+service_port    = 32400
+beta            = no
+desc            = Plex Media Server
+source          = thirdparty
+checksum        = abc123mock

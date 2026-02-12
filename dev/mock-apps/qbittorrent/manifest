@@ -1,0 +1,14 @@
+appname         = qBittorrent
+version         = 5.1.4
+display_name    = qBittorrent
+platform        = arm
+maintainer      = userdocs
+maintainer_url  = https://github.com/userdocs/qbittorrent-nox-static
+distributor     = conversun
+distributor_url = https://github.com/conversun/fnos-apps
+desktop_uidir   = ui
+desktop_applaunchname = qBittorrent.Application
+service_port    = 8085
+desc            = qBittorrent BitTorrent client
+source          = thirdparty
+checksum        = def456mock
