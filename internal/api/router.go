@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fnos-store/internal/cache"
+	"fnos-store/internal/config"
 	"fnos-store/internal/core"
 	"fnos-store/internal/platform"
+	"fnos-store/internal/scheduler"
 	"fnos-store/internal/source"
 	"io/fs"
 	"net/http"
@@ -22,8 +25,12 @@ type Server struct {
 	registry    *core.Registry
 	downloads   *core.Downloader
 	queue       *OperationQueue
+	configMgr   *config.Manager
+	cacheStore  *cache.Store
+	scheduler   *scheduler.Scheduler
 	appsDir     string
 	platform    string
+	storeApp    string
 	staticFS    fs.FS
 	lastCheck   time.Time
 	statusByApp map[string]string
@@ -36,8 +43,12 @@ type Config struct {
 	Source     source.Source
 	Registry   *core.Registry
 	Downloader *core.Downloader
+	ConfigMgr  *config.Manager
+	CacheStore *cache.Store
+	Scheduler  *scheduler.Scheduler
 	AppsDir    string
 	Platform   string
+	StoreApp   string
 	StaticFS   fs.FS
 }
 
@@ -49,8 +60,12 @@ func NewServer(cfg Config) *Server {
 		registry:    cfg.Registry,
 		downloads:   cfg.Downloader,
 		queue:       NewOperationQueue(),
+		configMgr:   cfg.ConfigMgr,
+		cacheStore:  cfg.CacheStore,
+		scheduler:   cfg.Scheduler,
 		appsDir:     cfg.AppsDir,
 		platform:    cfg.Platform,
+		storeApp:    cfg.StoreApp,
 		staticFS:    cfg.StaticFS,
 		statusByApp: make(map[string]string),
 	}
@@ -66,6 +81,8 @@ func (s *Server) routes() {
 	s.Mux.HandleFunc("POST /api/apps/{appname}/uninstall", s.handleUninstall)
 	s.Mux.HandleFunc("POST /api/check", s.handleCheck)
 	s.Mux.HandleFunc("GET /api/status", s.handleStatus)
+	s.Mux.HandleFunc("GET /api/settings", s.handleGetSettings)
+	s.Mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
 	s.Mux.HandleFunc("/", s.handleSPA)
 }
 
@@ -115,13 +132,26 @@ func (s *Server) refreshRegistry(ctx context.Context) error {
 		return err
 	}
 
+	now := time.Now()
 	s.mu.Lock()
 	s.registry.Merge(localApps, remoteApps)
-	s.lastCheck = time.Now()
+	s.lastCheck = now
 	s.mu.Unlock()
+
+	if s.cacheStore != nil {
+		s.cacheStore.SetLastCheckAt(now)
+	}
 
 	s.refreshRuntimeStatus()
 	return nil
+}
+
+func (s *Server) RefreshRegistry(ctx context.Context) error {
+	return s.refreshRegistry(ctx)
+}
+
+func (s *Server) SetScheduler(sched *scheduler.Scheduler) {
+	s.scheduler = sched
 }
 
 func (s *Server) refreshRuntimeStatus() {

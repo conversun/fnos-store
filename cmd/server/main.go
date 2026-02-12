@@ -4,6 +4,8 @@ import (
 	"context"
 	storeassets "fnos-store"
 	"fnos-store/internal/api"
+	"fnos-store/internal/cache"
+	"fnos-store/internal/config"
 	"fnos-store/internal/core"
 	"fnos-store/internal/platform"
 	"fnos-store/internal/scheduler"
@@ -17,12 +19,27 @@ import (
 	"time"
 )
 
+const storeAppName = "fnos-apps-store"
+
 func main() {
 	addr := envOr("LISTEN_ADDR", ":8011")
 	projectRoot := envOr("PROJECT_ROOT", findProjectRoot())
 	appsDir := envOr("APPS_DIR", defaultAppsDir(projectRoot))
-	cachePath := envOr("APPS_CACHE_PATH", filepath.Join(projectRoot, "var", "cache", "apps.json"))
+	dataDir := envOr("DATA_DIR", defaultDataDir(projectRoot))
+	cachePath := envOr("APPS_CACHE_PATH", filepath.Join(dataDir, "cache", "apps.json"))
 	downloadDir := envOr("DOWNLOAD_DIR", filepath.Join(os.TempDir(), "fnos-store-downloads"))
+
+	cfgMgr := config.NewManager(dataDir)
+	cfg, err := cfgMgr.LoadConfig()
+	if err != nil {
+		log.Printf("load config failed, using defaults: %v", err)
+	}
+
+	cacheStore := cache.NewStore(dataDir)
+	if err := cacheStore.Init(); err != nil {
+		log.Printf("cache init failed: %v", err)
+	}
+	cacheStore.CleanupStaleFiles()
 
 	ac := platform.NewAppCenter(projectRoot)
 	src := source.NewFNOSAppsSource(cachePath)
@@ -32,17 +49,24 @@ func main() {
 		log.Printf("cleanup stale tmp files failed: %v", err)
 	}
 
+	checkInterval := time.Duration(cfg.CheckIntervalHours) * time.Hour
+
 	srv := api.NewServer(api.Config{
 		AppCenter:  ac,
 		Source:     src,
 		Registry:   reg,
 		Downloader: downloader,
+		ConfigMgr:  cfgMgr,
+		CacheStore: cacheStore,
 		AppsDir:    appsDir,
 		Platform:   platform.DetectPlatform(),
+		StoreApp:   storeAppName,
 		StaticFS:   storeassets.WebFS,
 	})
 
-	sched := scheduler.New(6 * time.Hour)
+	sched := scheduler.New(checkInterval, srv.RefreshRegistry, cacheStore.LastCheckAt)
+	srv.SetScheduler(sched)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go sched.Start(ctx)
@@ -95,4 +119,12 @@ func defaultAppsDir(projectRoot string) string {
 		return "/var/apps"
 	}
 	return filepath.Join(projectRoot, "dev", "mock-apps")
+}
+
+func defaultDataDir(projectRoot string) string {
+	prod := filepath.Join("/var/apps", storeAppName, "var")
+	if _, err := os.Stat(filepath.Dir(prod)); err == nil {
+		return prod
+	}
+	return filepath.Join(projectRoot, "var")
 }

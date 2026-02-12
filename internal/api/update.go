@@ -19,5 +19,10 @@ func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.storeApp != "" && appname == s.storeApp {
+		s.runSelfUpdate(w, r, app)
+		return
+	}
+
 	s.runInstallLikeOperation(w, r, "update", appname, app)
 }
