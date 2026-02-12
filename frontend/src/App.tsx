@@ -1,29 +1,104 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import AppList from './components/AppList';
 import ProgressOverlay from './components/ProgressOverlay';
 import SettingsDialog from './components/SettingsDialog';
-import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp } from './api/client';
-import type { AppInfo } from './api/client';
+import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp, getSSEEventSource } from './api/client';
+import type { AppInfo, UpdateProgress } from './api/client';
 
 const App: React.FC = () => {
   const [apps, setApps] = useState<AppInfo[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [checking, setChecking] = useState<boolean>(false);
   const [lastCheck, setLastCheck] = useState<string>('');
-  const [updateProgress, setUpdateProgress] = useState<{ visible: boolean; message: string; progress: number }>({
-    visible: false,
-    message: '',
-    progress: 0,
-  });
+  
+  // Progress state
+  const [progressVisible, setProgressVisible] = useState(false);
+  const [progressState, setProgressState] = useState<UpdateProgress>({ step: '', progress: 0, message: '' });
+  const [activeApp, setActiveApp] = useState<string | null>(null);
+
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [checkInterval, setCheckInterval] = useState(24);
 
+  // SSE Reference to close it on unmount
+  const eventSourceRef = useRef<EventSource | null>(null);
+
   useEffect(() => {
     loadApps();
+    
+    // Setup SSE connection
+    const es = getSSEEventSource();
+    eventSourceRef.current = es;
+
+    es.onopen = () => {
+      console.log('SSE Connected');
+    };
+
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        handleServerEvent(data);
+      } catch (e) {
+        // Ignore parse errors (e.g. heartbeat)
+      }
+    };
+
+    es.onerror = (err) => {
+      console.error('SSE Error', err);
+      // Optional: Reconnect logic is usually handled by browser, but we might want to log it
+    };
+
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+    };
   }, []);
 
+  const handleServerEvent = (data: any) => {
+    // Check if this event is relevant to us
+    if (data.type === 'connected') return;
+
+    // If we have an active app, and this event is for that app (or missing app field implies current context)
+    // We prioritize events that match the active app.
+    if (activeApp && (data.app === activeApp || !data.app)) {
+        if (data.type === 'error') {
+            alert(`Error: ${data.error || 'Unknown error'}`);
+            setProgressVisible(false);
+            setActiveApp(null);
+            loadApps(); // Refresh to ensure consistent state
+            return;
+        }
+        
+        if (data.step === 'done') {
+            setProgressVisible(false);
+            setActiveApp(null);
+            loadApps(); // Refresh list
+            return;
+        }
+
+        setProgressState({
+            step: data.step || 'processing',
+            progress: data.progress || 0,
+            message: data.message || translateStep(data.step),
+            type: data.type
+        });
+    } else if (data.app && !activeApp) {
+        // Background update or from another session?
+        // We could show a toast, but for now ignore.
+    }
+  };
+
+  const translateStep = (step?: string) => {
+      switch(step) {
+          case 'downloading': return '正在下载...';
+          case 'installing': return '正在安装...';
+          case 'verifying': return '正在验证...';
+          case 'uninstalling': return '正在卸载...';
+          default: return '处理中...';
+      }
+  };
+
   const loadApps = async () => {
-    setLoading(true);
     try {
       const data = await fetchApps();
       setApps(data.apps);
@@ -42,43 +117,59 @@ const App: React.FC = () => {
       await loadApps();
     } catch (error) {
       console.error('Check failed:', error);
+      alert('检查更新失败');
     } finally {
       setChecking(false);
     }
   };
 
+  const startOperation = (app: AppInfo, action: string) => {
+      setActiveApp(app.appname);
+      setProgressVisible(true);
+      setProgressState({
+          step: 'starting',
+          progress: 0,
+          message: `${action} ${app.display_name}...`
+      });
+  };
+
   const handleInstall = async (app: AppInfo) => {
-    setUpdateProgress({ visible: true, message: `正在安装 ${app.display_name}...`, progress: 0 });
-    for (let i = 0; i <= 100; i += 10) {
-      setUpdateProgress((prev) => ({ ...prev, progress: i }));
-      await new Promise((resolve) => setTimeout(resolve, 200));
+    startOperation(app, '正在安装');
+    try {
+        await installApp(app.appname);
+        // Wait for SSE to finish
+    } catch (error) {
+        console.error(error);
+        alert('安装请求失败');
+        setProgressVisible(false);
+        setActiveApp(null);
     }
-    await installApp(app.appname);
-    setUpdateProgress({ visible: false, message: '', progress: 0 });
-    loadApps();
   };
 
   const handleUpdate = async (app: AppInfo) => {
-    setUpdateProgress({ visible: true, message: `正在更新 ${app.display_name}...`, progress: 0 });
-    for (let i = 0; i <= 100; i += 10) {
-      setUpdateProgress((prev) => ({ ...prev, progress: i }));
-      await new Promise((resolve) => setTimeout(resolve, 200));
+    startOperation(app, '正在更新');
+    try {
+        await updateApp(app.appname);
+    } catch (error) {
+        console.error(error);
+        alert('更新请求失败');
+        setProgressVisible(false);
+        setActiveApp(null);
     }
-    await updateApp(app.appname);
-    setUpdateProgress({ visible: false, message: '', progress: 0 });
-    loadApps();
   };
 
   const handleUninstall = async (app: AppInfo) => {
     if (!confirm(`确定要卸载 ${app.display_name} 吗？`)) return;
-    setUpdateProgress({ visible: true, message: `正在卸载 ${app.display_name}...`, progress: 0 });
-    for (let i = 0; i <= 100; i += 20) {
-      setUpdateProgress((prev) => ({ ...prev, progress: i }));
-      await new Promise((resolve) => setTimeout(resolve, 200));
+    
+    startOperation(app, '正在卸载');
+    try {
+        await uninstallApp(app.appname);
+    } catch (error) {
+        console.error(error);
+        alert('卸载请求失败');
+        setProgressVisible(false);
+        setActiveApp(null);
     }
-    await uninstallApp(app.appname);
-    setUpdateProgress({ visible: false, message: '', progress: 0 });
-    loadApps();
   };
 
   return (
@@ -138,9 +229,9 @@ const App: React.FC = () => {
       </footer>
 
       <ProgressOverlay
-        visible={updateProgress.visible}
-        message={updateProgress.message}
-        progress={updateProgress.progress}
+        visible={progressVisible}
+        message={progressState.message || ''}
+        progress={progressState.progress || 0}
       />
       
       {settingsVisible && (
