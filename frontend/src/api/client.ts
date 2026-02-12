@@ -83,3 +83,41 @@ export const uninstallApp = async (appname: string): Promise<void> => {
 export const getSSEEventSource = (): EventSource => {
   return new EventSource('/api/events');
 };
+
+export interface Settings {
+  check_interval_hours: number;
+}
+
+export interface StatusResponse {
+  version?: string;
+  platform: string;
+}
+
+export const fetchSettings = async (): Promise<Settings> => {
+  const response = await fetch('/api/settings');
+  if (!response.ok) {
+    throw new Error(`Failed to fetch settings: ${response.statusText}`);
+  }
+  return response.json();
+};
+
+export const updateSettings = async (settings: Settings): Promise<void> => {
+  const response = await fetch('/api/settings', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(settings),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to update settings: ${response.statusText}`);
+  }
+};
+
+export const fetchStatus = async (): Promise<StatusResponse> => {
+  const response = await fetch('/api/status');
+  if (!response.ok) {
+    throw new Error(`Failed to fetch status: ${response.statusText}`);
+  }
+  return response.json();
+};

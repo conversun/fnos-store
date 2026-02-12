@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import AppList from './components/AppList';
 import ProgressOverlay from './components/ProgressOverlay';
 import SettingsDialog from './components/SettingsDialog';
-import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp, getSSEEventSource } from './api/client';
+import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp, getSSEEventSource, fetchStatus } from './api/client';
 import type { AppInfo, UpdateProgress } from './api/client';
 
 const App: React.FC = () => {
@@ -10,6 +10,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [checking, setChecking] = useState<boolean>(false);
   const [lastCheck, setLastCheck] = useState<string>('');
+  const [isUpdatingStore, setIsUpdatingStore] = useState(false);
   
   // Progress state
   const [progressVisible, setProgressVisible] = useState(false);
@@ -17,7 +18,6 @@ const App: React.FC = () => {
   const [activeApp, setActiveApp] = useState<string | null>(null);
 
   const [settingsVisible, setSettingsVisible] = useState(false);
-  const [checkInterval, setCheckInterval] = useState(24);
 
   // SSE Reference to close it on unmount
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -54,9 +54,60 @@ const App: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isUpdatingStore) return;
+
+    let retries = 0;
+    const maxRetries = 30;
+    
+    setProgressState({
+        step: 'updating_store',
+        progress: 100,
+        message: '商店正在更新，请稍候...'
+    });
+    setProgressVisible(true);
+
+    const poll = async () => {
+      try {
+        await fetchStatus();
+        window.location.reload();
+      } catch (error) {
+        retries++;
+        if (retries > maxRetries) {
+          setProgressState({
+            step: 'error',
+            progress: 100,
+            message: '重启超时，请手动刷新页面',
+            type: 'error'
+          });
+          return;
+        }
+        
+        setProgressState({
+            step: 'restarting',
+            progress: 100,
+            message: '正在重启...'
+        });
+        
+        setTimeout(poll, 2000);
+      }
+    };
+
+    setTimeout(poll, 2000);
+
+  }, [isUpdatingStore]);
+
   const handleServerEvent = (data: any) => {
-    // Check if this event is relevant to us
     if (data.type === 'connected') return;
+
+    if (data.type === 'self_update') {
+        setIsUpdatingStore(true);
+        if (eventSourceRef.current) {
+            eventSourceRef.current.close();
+            eventSourceRef.current = null;
+        }
+        return;
+    }
 
     // If we have an active app, and this event is for that app (or missing app field implies current context)
     // We prioritize events that match the active app.
@@ -238,8 +289,6 @@ const App: React.FC = () => {
         <SettingsDialog
             visible={settingsVisible}
             onClose={() => setSettingsVisible(false)}
-            checkInterval={checkInterval}
-            onCheckIntervalChange={setCheckInterval}
         />
       )}
     </div>
