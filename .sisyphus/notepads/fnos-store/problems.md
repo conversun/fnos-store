@@ -1,0 +1,1 @@
+- 2026-02-13: No unresolved blockers recorded for Task 3 core-domain implementation.

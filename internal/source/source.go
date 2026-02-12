@@ -8,7 +8,13 @@ type RemoteApp struct {
 	DisplayName string
 	Version     string
 	Description string
+	ReleaseTag  string
+	FilePrefix  string
+	FpkVersion  string
+	ServicePort int
+	Platforms   []string
 	FpkURL      string
+	MirrorURL   string
 	IconURL     string
 	Source      string
 }

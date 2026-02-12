@@ -1,0 +1,2 @@
+- 2026-02-13: Raw GitHub URL was not reachable in this environment during QA, so fetch-path verification used a local HTTP server serving `fnos-apps/apps.json` plus offline-cache fallback check.
+- 2026-02-13: `lsp_diagnostics` required `gopls`; installed `gopls` under user path to enable diagnostics tooling.

@@ -1,0 +1,2 @@
+- 2026-02-13: fnOS manifest parsing must handle both fixed-width `key[16]` alignment and long keys like `desktop_applaunchname = ...` by falling back to first `=` splitting.
+- 2026-02-13: Appname casing must be preserved exactly from manifest and apps.json (`qBittorrent`), never normalized.

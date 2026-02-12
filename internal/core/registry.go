@@ -1,33 +1,134 @@
 package core
 
 import (
-	"fnos-store/internal/platform"
 	"fnos-store/internal/source"
+	"sort"
+	"strings"
+	"time"
 )
 
-type AppState string
+type AppStatus string
 
 const (
-	AppStateNotInstalled AppState = "not_installed"
-	AppStateInstalled    AppState = "installed"
-	AppStateUpdateReady  AppState = "update_ready"
-	AppStateRunning      AppState = "running"
-	AppStateStopped      AppState = "stopped"
+	AppStatusNotInstalled      AppStatus = "not_installed"
+	AppStatusInstalledUpToDate AppStatus = "installed_up_to_date"
+	AppStatusUpdateAvailable   AppStatus = "update_available"
 )
 
-type RegistryApp struct {
-	Remote    *source.RemoteApp
-	Local     *platform.InstalledApp
-	State     AppState
-	HasUpdate bool
+type AppInfo struct {
+	AppName           string
+	DisplayName       string
+	Description       string
+	ServicePort       int
+	Platform          string
+	Source            string
+	IconURL           string
+	Installed         bool
+	InstalledVersion  string
+	LatestVersion     string
+	ReleaseTag        string
+	FpkVersion        string
+	DownloadURL       string
+	MirrorURL         string
+	Status            AppStatus
+	HasRevisionUpdate bool
 }
 
 type Registry struct {
-	apps map[string]*RegistryApp
+	apps       map[string]AppInfo
+	updatedAt  time.Time
+	lastResult []AppInfo
 }
 
 func NewRegistry() *Registry {
 	return &Registry{
-		apps: make(map[string]*RegistryApp),
+		apps: make(map[string]AppInfo),
 	}
+}
+
+func (r *Registry) Merge(local []Manifest, remote []source.RemoteApp) []AppInfo {
+	localByName := make(map[string]Manifest, len(local))
+	for _, item := range local {
+		localByName[item.AppName] = item
+	}
+
+	r.apps = make(map[string]AppInfo, len(remote))
+	result := make([]AppInfo, 0, len(remote))
+	for _, item := range remote {
+		localManifest, installed := localByName[item.AppName]
+		app := AppInfo{
+			AppName:       item.AppName,
+			DisplayName:   item.DisplayName,
+			Description:   item.Description,
+			ServicePort:   item.ServicePort,
+			Platform:      strings.Join(item.Platforms, ","),
+			Source:        item.Source,
+			IconURL:       item.IconURL,
+			Installed:     installed,
+			LatestVersion: item.Version,
+			ReleaseTag:    item.ReleaseTag,
+			FpkVersion:    item.FpkVersion,
+			DownloadURL:   item.FpkURL,
+			MirrorURL:     item.MirrorURL,
+			Status:        AppStatusNotInstalled,
+		}
+
+		if installed {
+			app.InstalledVersion = localManifest.Version
+			if app.ServicePort == 0 {
+				app.ServicePort = localManifest.ServicePort
+			}
+			if app.Platform == "" {
+				app.Platform = localManifest.Platform
+			}
+
+			revisionUpdate := hasRevisionUpdate(item.ReleaseTag, localManifest.Version)
+			versionCmp := CompareVersions(localManifest.Version, item.Version)
+			if versionCmp < 0 || revisionUpdate {
+				app.Status = AppStatusUpdateAvailable
+			} else {
+				app.Status = AppStatusInstalledUpToDate
+			}
+			app.HasRevisionUpdate = revisionUpdate
+		}
+
+		r.apps[app.AppName] = app
+		result = append(result, app)
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].DisplayName < result[j].DisplayName
+	})
+
+	r.updatedAt = time.Now()
+	r.lastResult = result
+	return result
+}
+
+func (r *Registry) List() []AppInfo {
+	out := make([]AppInfo, len(r.lastResult))
+	copy(out, r.lastResult)
+	return out
+}
+
+func (r *Registry) Get(appname string) (AppInfo, bool) {
+	app, ok := r.apps[appname]
+	return app, ok
+}
+
+func hasRevisionUpdate(releaseTag, installedVersion string) bool {
+	prefix, ok := releaseTagPrefix(releaseTag)
+	if !ok {
+		return false
+	}
+	expectedTag := prefix + "/v" + installedVersion
+	return releaseTag != expectedTag
+}
+
+func releaseTagPrefix(releaseTag string) (string, bool) {
+	idx := strings.Index(releaseTag, "/v")
+	if idx <= 0 {
+		return "", false
+	}
+	return releaseTag[:idx], true
 }
