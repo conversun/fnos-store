@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	storeassets "fnos-store"
 	"fnos-store/internal/api"
 	"fnos-store/internal/core"
 	"fnos-store/internal/platform"
 	"fnos-store/internal/scheduler"
+	"fnos-store/internal/source"
 	"log"
 	"net/http"
 	"os"
@@ -16,13 +18,29 @@ import (
 )
 
 func main() {
-	addr := envOr("LISTEN_ADDR", ":8080")
+	addr := envOr("LISTEN_ADDR", ":8011")
 	projectRoot := envOr("PROJECT_ROOT", findProjectRoot())
+	appsDir := envOr("APPS_DIR", defaultAppsDir(projectRoot))
+	cachePath := envOr("APPS_CACHE_PATH", filepath.Join(projectRoot, "var", "cache", "apps.json"))
+	downloadDir := envOr("DOWNLOAD_DIR", filepath.Join(os.TempDir(), "fnos-store-downloads"))
 
 	ac := platform.NewAppCenter(projectRoot)
+	src := source.NewFNOSAppsSource(cachePath)
 	reg := core.NewRegistry()
+	downloader := core.NewDownloader(downloadDir)
+	if err := downloader.CleanupStaleTmpFiles(); err != nil {
+		log.Printf("cleanup stale tmp files failed: %v", err)
+	}
 
-	srv := api.NewServer(ac, reg)
+	srv := api.NewServer(api.Config{
+		AppCenter:  ac,
+		Source:     src,
+		Registry:   reg,
+		Downloader: downloader,
+		AppsDir:    appsDir,
+		Platform:   platform.DetectPlatform(),
+		StaticFS:   storeassets.WebFS,
+	})
 
 	sched := scheduler.New(6 * time.Hour)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -70,4 +88,11 @@ func findProjectRoot() string {
 		dir = filepath.Dir(dir)
 	}
 	return "."
+}
+
+func defaultAppsDir(projectRoot string) string {
+	if _, err := os.Stat("/var/apps"); err == nil {
+		return "/var/apps"
+	}
+	return filepath.Join(projectRoot, "dev", "mock-apps")
 }

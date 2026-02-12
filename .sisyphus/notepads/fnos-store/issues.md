@@ -1,2 +1,4 @@
 - 2026-02-13: Raw GitHub URL was not reachable in this environment during QA, so fetch-path verification used a local HTTP server serving `fnos-apps/apps.json` plus offline-cache fallback check.
 - 2026-02-13: `lsp_diagnostics` required `gopls`; installed `gopls` under user path to enable diagnostics tooling.
+- 2026-02-13: `https://raw.githubusercontent.com/conversun/fnos-apps/main/apps.json` currently returns 404 in this environment, so `/api/check` returns 502 unless cache exists.
+- 2026-02-13: `lsp_diagnostics` still reports "No active builds contain file" for this workspace; compilation verification used `go build ./...` as fallback signal.

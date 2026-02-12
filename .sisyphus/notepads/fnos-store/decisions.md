@@ -1,3 +1,5 @@
 - 2026-02-13: Implemented version comparison as numeric segment-by-segment with leading-digit extraction to handle mixed segments without semver dependency.
 - 2026-02-13: Implemented source offline-first flow as `remote fetch -> cache write (best effort) -> cache fallback on failure`.
 - 2026-02-13: Registry update detection uses both semantic version comparison and release-tag revision mismatch (`{prefix}/v{installed_version}` vs remote `release_tag`).
+- 2026-02-13: Added `OperationQueue` with explicit 409 rejection when an install/update/uninstall is already running, and separate CLI mutex to serialize all `appcenter-cli` calls.
+- 2026-02-13: Added root-level embedded assets package (`web_embed.go`) to satisfy `//go:embed web/*` against the existing project-root `web/` build output.

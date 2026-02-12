@@ -1,2 +1,4 @@
 - 2026-02-13: fnOS manifest parsing must handle both fixed-width `key[16]` alignment and long keys like `desktop_applaunchname = ...` by falling back to first `=` splitting.
 - 2026-02-13: Appname casing must be preserved exactly from manifest and apps.json (`qBittorrent`), never normalized.
+- 2026-02-13: Serving embedded SPA from `embed.FS` with non-API fallback works reliably by checking `fs.Stat` for `/web/*` assets and returning `web/index.html` for misses.
+- 2026-02-13: SSE progress streams are simplest when operation endpoints return `text/event-stream` directly, with explicit `event: progress` frames and immediate flushes.

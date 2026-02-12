@@ -1,1 +1,2 @@
 - 2026-02-13: No unresolved blockers recorded for Task 3 core-domain implementation.
+- 2026-02-13: External dependency risk remains: if upstream `apps.json` is unavailable and local cache is empty, API catalog endpoints cannot provide app data.
