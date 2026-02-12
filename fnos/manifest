@@ -1,0 +1,15 @@
+appname         = fnos-apps-store
+version         = 1.0.0
+display_name    = fnOS Apps Store
+platform        = x86
+maintainer      = conversun
+maintainer_url  = https://github.com/conversun
+distributor     = conversun
+distributor_url = https://github.com/conversun/fnos-store
+desktop_uidir   = ui
+desktop_applaunchname = fnos-apps-store.Application
+service_port    = 8011
+beta            = no
+desc            = fnOS第三方应用商店，支持一键安装、更新和卸载来自conversun/fnos-apps的所有应用。
+source          = thirdparty
+checksum        = 

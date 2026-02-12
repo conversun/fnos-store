@@ -1,0 +1,15 @@
+{
+    ".url": {
+        "fnos-apps-store.Application": 
+        {
+            "title": "fnOS Apps Store",
+            "desc": "fnOS Apps Store",
+            "icon": "images/{0}.png",
+            "type": "url",
+            "port": "8011",
+            "protocol": "http",
+            "url": "/",
+            "allUsers": true
+        }
+    }
+}

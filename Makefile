@@ -1,4 +1,4 @@
-.PHONY: dev build-linux-x86 build-linux-arm build-frontend build-all clean
+.PHONY: dev build-linux-x86 build-linux-arm build-frontend build-all fpk clean
 
 BINARY_NAME := fnos-store
 BUILD_DIR := build
@@ -19,5 +19,8 @@ build-frontend:
 
 build-all: build-frontend build-linux-x86 build-linux-arm
 
+fpk:
+	bash build.sh
+
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_DIR) fnos-apps-store_*.fpk
