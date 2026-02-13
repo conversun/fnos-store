@@ -132,7 +132,7 @@ func parseManifestLine(line string) (key, value string, ok bool) {
 		left := line[:manifestFieldWidth]
 		right := strings.TrimSpace(line[manifestFieldWidth:])
 		if strings.HasPrefix(right, "=") {
-			return strings.TrimSpace(left), strings.TrimSpace(strings.TrimPrefix(right, "=")), true
+			return strings.TrimSpace(left), unquote(strings.TrimSpace(strings.TrimPrefix(right, "="))), true
 		}
 	}
 
@@ -141,5 +141,14 @@ func parseManifestLine(line string) (key, value string, ok bool) {
 		return "", "", false
 	}
 
-	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), true
+	return strings.TrimSpace(parts[0]), unquote(strings.TrimSpace(parts[1])), true
+}
+
+func unquote(s string) string {
+	if len(s) >= 2 {
+		if (s[0] == '"' && s[len(s)-1] == '"') || (s[0] == '\'' && s[len(s)-1] == '\'') {
+			return s[1 : len(s)-1]
+		}
+	}
+	return s
 }
