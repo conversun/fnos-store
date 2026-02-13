@@ -1,0 +1,47 @@
+package api
+
+type appResponse struct {
+	AppName          string `json:"appname"`
+	DisplayName      string `json:"display_name"`
+	Installed        bool   `json:"installed"`
+	InstalledVersion string `json:"installed_version"`
+	LatestVersion    string `json:"latest_version"`
+	HasUpdate        bool   `json:"has_update"`
+	Platform         string `json:"platform"`
+	ReleaseURL       string `json:"release_url"`
+	ReleaseNotes     string `json:"release_notes"`
+	Status           string `json:"status"`
+	ServicePort      int    `json:"service_port,omitempty"`
+	Homepage         string `json:"homepage,omitempty"`
+	IconURL          string `json:"icon_url,omitempty"`
+}
+
+type appsListResponse struct {
+	Apps      []appResponse `json:"apps"`
+	LastCheck string        `json:"last_check"`
+}
+
+type checkResponse struct {
+	Status           string `json:"status"`
+	Checked          int    `json:"checked"`
+	UpdatesAvailable int    `json:"updates_available"`
+}
+
+type statusResponse struct {
+	Status    string `json:"status"`
+	Busy      bool   `json:"busy"`
+	Operation string `json:"operation"`
+	AppName   string `json:"appname"`
+	StartedAt string `json:"started_at"`
+	LastCheck string `json:"last_check"`
+	Platform  string `json:"platform"`
+}
+
+type uninstallResponse struct {
+	Status  string `json:"status"`
+	AppName string `json:"appname"`
+}
+
+type errorResponse struct {
+	Error string `json:"error"`
+}

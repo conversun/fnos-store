@@ -26,5 +26,5 @@ func (s *Server) handleUninstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "appname": appname})
+	writeJSON(w, http.StatusOK, uninstallResponse{Status: "ok", AppName: appname})
 }

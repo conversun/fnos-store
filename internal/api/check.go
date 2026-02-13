@@ -20,22 +20,22 @@ func (s *Server) handleCheck(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":            "ok",
-		"checked":           len(apps),
-		"updates_available": updates,
+	writeJSON(w, http.StatusOK, checkResponse{
+		Status:           "ok",
+		Checked:          len(apps),
+		UpdatesAvailable: updates,
 	})
 }
 
-func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	queueStatus := s.queue.Status()
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":     "ok",
-		"busy":       queueStatus.Busy,
-		"operation":  queueStatus.Operation,
-		"appname":    queueStatus.AppName,
-		"started_at": formatTimestamp(queueStatus.StartedAt),
-		"last_check": formatTimestamp(s.getLastCheck()),
-		"platform":   s.platform,
+func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
+	qs := s.queue.Status()
+	writeJSON(w, http.StatusOK, statusResponse{
+		Status:    "ok",
+		Busy:      qs.Busy,
+		Operation: qs.Operation,
+		AppName:   qs.AppName,
+		StartedAt: formatTimestamp(qs.StartedAt),
+		LastCheck: formatTimestamp(s.getLastCheck()),
+		Platform:  s.platform,
 	})
 }
