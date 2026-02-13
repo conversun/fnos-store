@@ -35,17 +35,16 @@ type appsJSONPayload struct {
 }
 
 type appsJSONEntry struct {
-	AppName     string            `json:"appname"`
-	DisplayName string            `json:"display_name"`
-	Description string            `json:"description"`
-	Version     string            `json:"version"`
-	FpkVersion  string            `json:"fpk_version"`
-	ReleaseTag  string            `json:"release_tag"`
-	FilePrefix  string            `json:"file_prefix"`
-	ServicePort int               `json:"service_port"`
-	IconURL     string            `json:"icon_url"`
-	Platforms   []string          `json:"platforms"`
-	FpkURLs     map[string]string `json:"fpk_urls,omitempty"` // per-platform override: {"x86": "https://...", "arm": "https://..."}
+	AppName     string   `json:"appname"`
+	DisplayName string   `json:"display_name"`
+	Description string   `json:"description"`
+	Version     string   `json:"version"`
+	FpkVersion  string   `json:"fpk_version"`
+	ReleaseTag  string   `json:"release_tag"`
+	FilePrefix  string   `json:"file_prefix"`
+	ServicePort int      `json:"service_port"`
+	IconURL     string   `json:"icon_url"`
+	Platforms   []string `json:"platforms"`
 }
 
 func NewFNOSAppsSource(cachePath string, cfgMgr *config.Manager) *FNOSAppsSource {
@@ -150,19 +149,14 @@ func (s *FNOSAppsSource) decodeApps(raw []byte) ([]RemoteApp, error) {
 			continue
 		}
 
-		var directURL string
-		if override, ok := item.FpkURLs[s.platform]; ok && override != "" {
-			directURL = override
-		} else {
-			directURL = fmt.Sprintf(
-				"%s/%s/%s_%s_%s.fpk",
-				githubReleaseBase,
-				item.ReleaseTag,
-				item.FilePrefix,
-				item.FpkVersion,
-				s.platform,
-			)
-		}
+		directURL := fmt.Sprintf(
+			"%s/%s/%s_%s_%s.fpk",
+			githubReleaseBase,
+			item.ReleaseTag,
+			item.FilePrefix,
+			item.FpkVersion,
+			s.platform,
+		)
 
 		app := RemoteApp{
 			AppName:     item.AppName,
