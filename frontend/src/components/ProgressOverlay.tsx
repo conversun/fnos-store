@@ -1,4 +1,11 @@
 import React from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Progress } from "@/components/ui/progress"
 
 interface ProgressOverlayProps {
   visible: boolean;
@@ -8,36 +15,37 @@ interface ProgressOverlayProps {
 }
 
 const ProgressOverlay: React.FC<ProgressOverlayProps> = ({ visible, message, progress, onCancel }) => {
-  if (!visible) return null;
-
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm w-full shadow-xl">
-        <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white">正在处理...</h3>
-        <div className="mb-4">
-          <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+    <Dialog open={visible} onOpenChange={() => {}}>
+      <DialogContent 
+        className="sm:max-w-sm [&>button]:hidden" 
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
+        <DialogHeader>
+          <DialogTitle>正在处理...</DialogTitle>
+        </DialogHeader>
+        
+        <div className="flex flex-col gap-2 py-2">
+          <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
             <span>{message}</span>
             <span>{Math.round(progress)}%</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-            <div
-              className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            ></div>
-          </div>
+          <Progress value={progress} className="w-full" />
         </div>
+
         {onCancel && (
-          <div className="text-right">
+          <div className="flex justify-end pt-2">
             <button
               onClick={onCancel}
-              className="text-gray-500 hover:text-gray-700 text-sm underline"
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-sm underline"
             >
               取消
             </button>
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

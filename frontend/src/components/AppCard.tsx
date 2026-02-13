@@ -1,5 +1,9 @@
 import React from 'react';
 import type { AppInfo } from '../api/client';
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Download, RefreshCw, Trash2, ExternalLink, Globe, Package } from 'lucide-react';
 
 interface AppCardProps {
   app: AppInfo;
@@ -16,12 +20,12 @@ const AppCard: React.FC<AppCardProps> = ({ app, onInstall, onUpdate, onUninstall
   // Status mapping
   const getStatusBadge = () => {
     if (!isInstalled) {
-      return <span className="px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-600 rounded">未安装</span>;
+      return <Badge variant="secondary">未安装</Badge>;
     }
     if (canUpdate) {
-      return <span className="px-2 py-1 text-xs font-semibold bg-orange-100 text-orange-600 rounded">有更新</span>;
+      return <Badge variant="destructive">有更新</Badge>;
     }
-    return <span className="px-2 py-1 text-xs font-semibold bg-green-100 text-green-600 rounded">已安装</span>;
+    return <Badge className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900">已安装</Badge>;
   };
 
   const getStatusText = (status: string) => {
@@ -36,25 +40,29 @@ const AppCard: React.FC<AppCardProps> = ({ app, onInstall, onUpdate, onUninstall
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 flex flex-col h-full">
-      <div className="flex items-start space-x-4 mb-4">
+    <Card className="flex flex-col h-full hover:shadow-md transition-shadow">
+      <CardHeader className="flex-row gap-4 space-y-0 p-4 pb-2">
         {app.icon_url ? (
-          <img src={app.icon_url} alt={app.display_name} className="w-16 h-16 rounded-md object-contain bg-gray-50" />
+          <img 
+            src={app.icon_url} 
+            alt={app.display_name} 
+            className="w-16 h-16 rounded-md object-contain bg-gray-50" 
+          />
         ) : (
-          <div className="w-16 h-16 bg-gray-200 dark:bg-gray-700 rounded-md flex items-center justify-center text-2xl font-bold text-gray-500">
-            {app.display_name.charAt(0)}
+          <div className="w-16 h-16 bg-gray-200 dark:bg-gray-700 rounded-md flex items-center justify-center text-gray-500">
+            <Package className="h-8 w-8" />
           </div>
         )}
         
         <div className="flex-1 min-w-0">
           <div className="flex justify-between items-start">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate" title={app.display_name}>
+            <h3 className="text-lg font-semibold truncate pr-2" title={app.display_name}>
               {app.display_name}
             </h3>
             {getStatusBadge()}
           </div>
           
-          <div className="text-sm text-gray-500 dark:text-gray-400 mt-1 space-y-1">
+          <div className="text-sm text-muted-foreground mt-1 space-y-1">
             <div className="flex items-center justify-between">
               <span>版本:</span>
               <span className="font-mono">{isInstalled ? app.installed_version : app.latest_version}</span>
@@ -75,74 +83,84 @@ const AppCard: React.FC<AppCardProps> = ({ app, onInstall, onUpdate, onUninstall
             )}
           </div>
         </div>
-      </div>
+      </CardHeader>
 
-      <div className="mt-auto space-y-3">
-        {/* Action Buttons */}
-        <div className="grid grid-cols-2 gap-2">
+      <CardContent className="p-4 pt-2 flex-1">
+      </CardContent>
+
+      <CardFooter className="p-4 pt-0 flex-col gap-3">
+        <div className="grid grid-cols-2 gap-2 w-full">
             {!isInstalled ? (
-                <button
-                onClick={() => onInstall(app)}
-                className="col-span-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition font-medium"
+                <Button 
+                    onClick={() => onInstall(app)}
+                    className="col-span-2 w-full"
                 >
-                安装
-                </button>
+                    <Download className="mr-2 h-4 w-4" />
+                    安装
+                </Button>
             ) : canUpdate ? (
                 <>
-                <button
+                <Button
                     onClick={() => onUpdate(app)}
-                    className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 transition font-medium"
+                    className="bg-orange-500 hover:bg-orange-600 text-white"
                 >
+                    <RefreshCw className="mr-2 h-4 w-4" />
                     更新
-                </button>
-                <button
+                </Button>
+                <Button
+                    variant="ghost"
                     onClick={() => onUninstall(app)}
-                    className="px-4 py-2 text-red-500 hover:bg-red-50 rounded transition border border-gray-200"
+                    className="text-red-500 hover:text-red-600 hover:bg-red-50"
                 >
+                    <Trash2 className="mr-2 h-4 w-4" />
                     卸载
-                </button>
+                </Button>
                 </>
             ) : (
                 <>
                 {serviceUrl && app.status === 'running' ? (
-                   <a
-                   href={serviceUrl}
-                   target="_blank"
-                   rel="noopener noreferrer"
-                   className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition font-medium text-center"
-                 >
-                   打开
-                 </a>
+                   <Button asChild variant="outline" className="text-green-600 hover:text-green-700 border-green-200 hover:bg-green-50">
+                     <a
+                       href={serviceUrl}
+                       target="_blank"
+                       rel="noopener noreferrer"
+                     >
+                       <ExternalLink className="mr-2 h-4 w-4" />
+                       打开
+                     </a>
+                   </Button>
                 ) : (
-                    <button disabled className="px-4 py-2 bg-gray-100 text-gray-400 rounded cursor-not-allowed">
+                    <Button variant="ghost" disabled className="bg-gray-100 text-gray-400 cursor-not-allowed">
                         已是最新
-                    </button>
+                    </Button>
                 )}
-                 <button
+                 <Button
+                    variant="ghost"
                     onClick={() => onUninstall(app)}
-                    className="px-4 py-2 text-red-500 hover:bg-red-50 rounded transition border border-gray-200"
+                    className="text-red-500 hover:text-red-600 hover:bg-red-50"
                 >
+                    <Trash2 className="mr-2 h-4 w-4" />
                     卸载
-                </button>
+                </Button>
                 </>
             )}
         </div>
         
-        {/* Links */}
          {app.homepage && (
-            <div className="text-center pt-2">
+            <div className="text-center w-full">
                 <a 
                     href={app.homepage} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="text-xs text-gray-400 hover:text-blue-500 transition"
+                    className="text-xs text-muted-foreground hover:text-primary transition inline-flex items-center"
                 >
+                    <Globe className="mr-1 h-3 w-3" />
                     访问官网
                 </a>
             </div>
         )}
-      </div>
-    </div>
+      </CardFooter>
+    </Card>
   );
 };
 

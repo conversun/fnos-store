@@ -1,4 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { LayoutGrid, CheckCircle2, RefreshCw, Settings } from 'lucide-react';
+import { Button } from './components/ui/button';
+import { Badge } from './components/ui/badge';
+import { Separator } from './components/ui/separator';
 import AppList from './components/AppList';
 import ProgressOverlay from './components/ProgressOverlay';
 import SettingsDialog from './components/SettingsDialog';
@@ -18,6 +22,7 @@ const App: React.FC = () => {
   const [activeApp, setActiveApp] = useState<string | null>(null);
 
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'installed' | 'update_available'>('all');
 
   // SSE Reference to close it on unmount
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -223,61 +228,144 @@ const App: React.FC = () => {
     }
   };
 
+  const filteredApps = apps.filter(app => {
+    if (activeFilter === 'all') return true;
+    if (activeFilter === 'installed') return app.installed;
+    if (activeFilter === 'update_available') return app.has_update;
+    return true;
+  });
+
+  const counts = {
+      all: apps.length,
+      installed: apps.filter(a => a.installed).length,
+      update_available: apps.filter(a => a.has_update).length
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white flex flex-col">
-      <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-blue-600 dark:text-blue-400">fnOS Apps Store</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              上次检查: {lastCheck ? new Date(lastCheck).toLocaleString() : '从未'}
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white flex flex-col md:flex-row">
+      <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 h-screen sticky top-0">
+         <div className="p-6">
+            <h1 className="text-2xl font-bold text-blue-600 dark:text-blue-400">fnOS Apps</h1>
+            <p className="text-sm text-gray-500 mt-1">
+               上次检查: {lastCheck ? new Date(lastCheck).toLocaleString() : '从未'}
             </p>
-          </div>
-          <div className="flex space-x-3 items-center">
-             <button
-              onClick={() => setSettingsVisible(true)}
-              className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition"
-              title="设置"
+         </div>
+         
+         <nav className="flex-1 px-4 space-y-2">
+            <Button 
+              variant={activeFilter === 'all' ? 'secondary' : 'ghost'} 
+              className="w-full justify-start"
+              onClick={() => setActiveFilter('all')}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
-            <button
-              onClick={handleCheck}
-              disabled={checking}
-              className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition flex items-center ${
-                checking ? 'opacity-70 cursor-wait' : ''
-              }`}
+               <LayoutGrid className="mr-2 h-4 w-4" />
+               全部
+               <Badge variant="secondary" className="ml-auto">{counts.all}</Badge>
+            </Button>
+            <Button 
+              variant={activeFilter === 'installed' ? 'secondary' : 'ghost'} 
+              className="w-full justify-start"
+              onClick={() => setActiveFilter('installed')}
             >
-              {checking && (
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              )}
-              {checking ? '检查中...' : '立即检查'}
-            </button>
-          </div>
-        </div>
-      </header>
+               <CheckCircle2 className="mr-2 h-4 w-4" />
+               已安装
+               <Badge variant="secondary" className="ml-auto">{counts.installed}</Badge>
+            </Button>
+            <Button 
+              variant={activeFilter === 'update_available' ? 'secondary' : 'ghost'} 
+              className="w-full justify-start"
+              onClick={() => setActiveFilter('update_available')}
+            >
+               <RefreshCw className="mr-2 h-4 w-4" />
+               有更新
+               {counts.update_available > 0 && (
+                 <Badge variant="destructive" className="ml-auto">{counts.update_available}</Badge>
+               )}
+            </Button>
+         </nav>
 
-      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-        <AppList
-          apps={apps}
-          loading={loading}
-          onInstall={handleInstall}
-          onUpdate={handleUpdate}
-          onUninstall={handleUninstall}
-        />
-      </main>
+         <div className="p-4">
+            <Separator className="mb-4" />
+            <Button variant="ghost" className="w-full justify-start text-gray-500" onClick={() => setSettingsVisible(true)}>
+               <Settings className="mr-2 h-4 w-4" />
+               设置
+            </Button>
+         </div>
+      </aside>
 
-      <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
-          fnOS Apps Store &copy; 2026 - Designed for fnOS
+      <div className="flex-1 flex flex-col min-h-screen">
+        <div className="md:hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 sticky top-0 z-20">
+           <div className="flex justify-between items-center mb-4">
+              <h1 className="text-xl font-bold text-blue-600">fnOS Apps</h1>
+              <Button size="icon" variant="ghost" onClick={() => setSettingsVisible(true)}>
+                 <Settings className="h-5 w-5" />
+              </Button>
+           </div>
+           <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
+               <Button 
+                  variant={activeFilter === 'all' ? 'default' : 'outline'} 
+                  size="sm"
+                  onClick={() => setActiveFilter('all')}
+                  className="whitespace-nowrap"
+               >
+                  全部 ({counts.all})
+               </Button>
+               <Button 
+                  variant={activeFilter === 'installed' ? 'default' : 'outline'} 
+                  size="sm"
+                  onClick={() => setActiveFilter('installed')}
+                  className="whitespace-nowrap"
+               >
+                  已安装 ({counts.installed})
+               </Button>
+               <Button 
+                  variant={activeFilter === 'update_available' ? 'default' : 'outline'} 
+                  size="sm"
+                  onClick={() => setActiveFilter('update_available')}
+                  className="whitespace-nowrap"
+               >
+                  有更新 ({counts.update_available})
+               </Button>
+           </div>
         </div>
-      </footer>
+
+        <header className="hidden md:flex bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-8 py-4 justify-between items-center sticky top-0 z-10">
+           <h2 className="text-lg font-medium">
+              {activeFilter === 'all' && '全部应用'}
+              {activeFilter === 'installed' && '已安装应用'}
+              {activeFilter === 'update_available' && '可用更新'}
+           </h2>
+           <div className="flex items-center space-x-4">
+               <Button 
+                 onClick={handleCheck} 
+                 disabled={checking}
+                 className={checking ? 'opacity-70 cursor-wait' : ''}
+               >
+                 {checking ? (
+                   <>
+                     <RefreshCw className={`mr-2 h-4 w-4 ${checking ? 'animate-spin' : ''}`} />
+                     {checking ? '检查中...' : '立即检查'}
+                   </>
+                 ) : (
+                   <>
+                     <RefreshCw className="mr-2 h-4 w-4" />
+                     立即检查
+                   </>
+                 )}
+               </Button>
+           </div>
+        </header>
+
+        <main className="flex-grow p-4 md:p-8 overflow-y-auto">
+           <AppList
+             apps={filteredApps}
+             loading={loading}
+             onInstall={handleInstall}
+             onUpdate={handleUpdate}
+             onUninstall={handleUninstall}
+             filterType={activeFilter}
+           />
+        </main>
+      </div>
 
       <ProgressOverlay
         visible={progressVisible}
