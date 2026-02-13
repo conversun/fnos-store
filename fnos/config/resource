@@ -1,0 +1,10 @@
+{
+    "port-config": {
+        "protocol-file": "fnos-apps-store.sc"
+    },
+    "data-share": {
+        "shares": []
+    },
+    "systemd-unit": {
+    }
+}

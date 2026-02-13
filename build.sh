@@ -1,9 +1,11 @@
 #!/bin/bash
 set -e
+export COPYFILE_DISABLE=1
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
-FNOS_APPS_DIR="$SCRIPT_DIR/../fnos-apps"
+FNOS_DIR="$SCRIPT_DIR/fnos"
+FNPACK="$BUILD_DIR/fnpack"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -19,8 +21,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Verify fnos-apps repo exists (needed for build-fpk.sh and shared framework)
-[ -f "$FNOS_APPS_DIR/scripts/build-fpk.sh" ] || error "fnos-apps repo not found at $FNOS_APPS_DIR"
+[ -x "$FNPACK" ] || error "fnpack 未找到: $FNPACK — 请下载: https://static2.fnnas.com/fnpack/"
+[ -d "$FNOS_DIR" ] || error "fnos/ 目录不存在"
 
 mkdir -p "$BUILD_DIR/tmp"
 
@@ -45,7 +47,7 @@ GOOS=linux GOARCH=arm64 go build -o "$BUILD_DIR/store-server-arm" ./cmd/server/
 
 info "Go 构建完成"
 
-# ── Step 3: Create app.tgz and build fpk for each platform ─────────────────
+# ── Step 3: Build fpk for each platform using fnpack ────────────────────────
 for PLATFORM in x86 arm; do
     info "打包 ${PLATFORM} fpk..."
 
@@ -55,22 +57,28 @@ for PLATFORM in x86 arm; do
         BINARY="$BUILD_DIR/store-server-arm"
     fi
 
-    # Create app.tgz: binary + web assets
-    APP_TGZ="$BUILD_DIR/tmp/app-${PLATFORM}.tgz"
-    STAGING="$BUILD_DIR/tmp/staging-${PLATFORM}"
-    mkdir -p "$STAGING"
+    STAGING="$BUILD_DIR/tmp/fnos-${PLATFORM}"
+    rm -rf "$STAGING"
+    cp -a "$FNOS_DIR" "$STAGING"
 
-    cp "$BINARY" "$STAGING/store-server"
+    cp "$BINARY" "$STAGING/app/store-server"
     if [ -d "$SCRIPT_DIR/web" ]; then
-        cp -r "$SCRIPT_DIR/web" "$STAGING/web"
+        cp -r "$SCRIPT_DIR/web" "$STAGING/app/web"
     fi
 
-    tar -czf "$APP_TGZ" -C "$STAGING" .
+    if [ "$PLATFORM" = "arm" ]; then
+        sed -i.tmp "s/^platform.*/platform              = arm/" "$STAGING/manifest"
+        rm -f "$STAGING/manifest.tmp"
+    fi
 
-    # Use build-fpk.sh from fnos-apps to produce the .fpk
     cd "$SCRIPT_DIR"
-    "$FNOS_APPS_DIR/scripts/build-fpk.sh" "." "$APP_TGZ" "" "$PLATFORM"
+    "$FNPACK" build --directory "$STAGING"
+
+    APPNAME=$(grep "^appname" "$STAGING/manifest" | awk -F'=' '{print $2}' | tr -d ' ')
+    VERSION=$(grep "^version" "$STAGING/manifest" | awk -F'=' '{print $2}' | tr -d ' ')
+    FPK_NAME="${APPNAME}_${VERSION}_${PLATFORM}.fpk"
+    mv "${APPNAME}.fpk" "$FPK_NAME" 2>/dev/null || true
 done
 
 info "构建完成！"
-ls -lh "$SCRIPT_DIR"/fnos-apps-store_*.fpk 2>/dev/null || true
+ls -lh "$SCRIPT_DIR"/*_*.fpk 2>/dev/null || true

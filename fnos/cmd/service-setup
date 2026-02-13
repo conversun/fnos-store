@@ -3,12 +3,9 @@
 LOG_FILE="${TRIM_PKGVAR}/${TRIM_APPNAME}.log"
 PID_FILE="${TRIM_PKGVAR}/${TRIM_APPNAME}.pid"
 
-APP_NAME=fnos-apps-store
-APP_DIR=/var/apps/$APP_NAME/target
-APP_DATA_DIR=/var/apps/$APP_NAME/var
+APP_DIR="${TRIM_APPDEST}"
+APP_DATA_DIR="${TRIM_PKGVAR}"
 
 SERVICE_COMMAND="$APP_DIR/store-server"
-SERVICE_PID_FILE="$APP_DATA_DIR/store-server.pid"
-SERVICE_LOG="$APP_DATA_DIR/store-server.log"
 SVC_BACKGROUND=y
 SVC_WRITE_PID=y

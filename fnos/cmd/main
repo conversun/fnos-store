@@ -1,0 +1,46 @@
+#!/bin/bash
+
+COMMON=$(dirname $0)"/common"
+if [ -r "${COMMON}" ]; then
+    . "${COMMON}"
+fi
+
+SVC_SETUP=$(dirname $0)"/service-setup"
+if [ -r "${SVC_SETUP}" ]; then
+    . "${SVC_SETUP}"
+fi
+
+case $1 in
+    start)
+        if daemon_status; then
+            echo "${DNAME} is already running" >> ${LOG_FILE}
+            exit 0
+        else
+            echo "Starting ${DNAME} ..." >> ${LOG_FILE}
+            start_daemon
+            exit $?
+        fi
+        ;;
+    stop)
+        if daemon_status; then
+            echo "Stopping ${DNAME} ..." >> ${LOG_FILE}
+            stop_daemon
+            exit $?
+        else
+            echo "${DNAME} is not running" >> ${LOG_FILE}
+            exit 0
+        fi
+        ;;
+    status)
+        if daemon_status; then
+            echo "${DNAME} is running"
+            exit 0
+        else
+            echo "${DNAME} is not running"
+            exit 3
+        fi
+        ;;
+    *)
+        exit 1
+        ;;
+esac

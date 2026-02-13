@@ -1,0 +1,15 @@
+{
+    ".url": {
+        "fnos-apps-store.Application": 
+        {
+            "title": "fnOS Apps",
+            "desc": "fnOS Apps",
+            "icon": "images/{0}.png",
+            "type": "iframe",
+            "port": "8011",
+            "protocol": "http",
+            "url": "/",
+            "allUsers": true
+        }
+    }
+}
