@@ -1,7 +1,8 @@
 import React from 'react';
 import type { AppInfo } from '../api/client';
 import AppCard from './AppCard';
-import { Loader2, PackageSearch, CheckCircle2, RefreshCw } from 'lucide-react';
+import { PackageSearch, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface AppListProps {
   apps: AppInfo[];
@@ -26,8 +27,16 @@ const getEmptyMessage = (filterType?: string) => {
 const AppList: React.FC<AppListProps> = ({ apps, loading, onInstall, onUpdate, onUninstall, filterType }) => {
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="flex flex-col space-y-3">
+            <Skeleton className="h-[125px] w-full rounded-xl" />
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-[250px]" />
+              <Skeleton className="h-4 w-[200px]" />
+            </div>
+          </div>
+        ))}
       </div>
     );
   }

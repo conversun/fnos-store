@@ -6,6 +6,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Progress } from "@/components/ui/progress"
+import { Button } from "@/components/ui/button"
 
 interface ProgressOverlayProps {
   visible: boolean;
@@ -27,7 +28,7 @@ const ProgressOverlay: React.FC<ProgressOverlayProps> = ({ visible, message, pro
         </DialogHeader>
         
         <div className="flex flex-col gap-2 py-2">
-          <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
+          <div className="flex justify-between text-sm text-muted-foreground">
             <span>{message}</span>
             <span>{Math.round(progress)}%</span>
           </div>
@@ -36,12 +37,9 @@ const ProgressOverlay: React.FC<ProgressOverlayProps> = ({ visible, message, pro
 
         {onCancel && (
           <div className="flex justify-end pt-2">
-            <button
-              onClick={onCancel}
-              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-sm underline"
-            >
+            <Button variant="ghost" size="sm" onClick={onCancel}>
               取消
-            </button>
+            </Button>
           </div>
         )}
       </DialogContent>

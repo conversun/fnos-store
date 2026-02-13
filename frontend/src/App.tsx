@@ -1,13 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LayoutGrid, CheckCircle2, RefreshCw, Settings } from 'lucide-react';
+import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Badge } from './components/ui/badge';
-import { Separator } from './components/ui/separator';
 import AppList from './components/AppList';
 import ProgressOverlay from './components/ProgressOverlay';
 import SettingsDialog from './components/SettingsDialog';
 import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp, getSSEEventSource, fetchStatus } from './api/client';
 import type { AppInfo, UpdateProgress } from './api/client';
+import { toast } from "sonner"
+import { Toaster } from "@/components/ui/sonner"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 const App: React.FC = () => {
   const [apps, setApps] = useState<AppInfo[]>([]);
@@ -23,6 +35,7 @@ const App: React.FC = () => {
 
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'installed' | 'update_available'>('all');
+  const [pendingUninstallApp, setPendingUninstallApp] = useState<AppInfo | null>(null);
 
   // SSE Reference to close it on unmount
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -118,7 +131,7 @@ const App: React.FC = () => {
     // We prioritize events that match the active app.
     if (activeApp && (data.app === activeApp || !data.app)) {
         if (data.type === 'error') {
-            alert(`Error: ${data.error || 'Unknown error'}`);
+            toast.error(data.error || '发生未知错误');
             setProgressVisible(false);
             setActiveApp(null);
             loadApps(); // Refresh to ensure consistent state
@@ -173,7 +186,7 @@ const App: React.FC = () => {
       await loadApps();
     } catch (error) {
       console.error('Check failed:', error);
-      alert('检查更新失败');
+      toast.error('检查更新失败');
     } finally {
       setChecking(false);
     }
@@ -196,7 +209,7 @@ const App: React.FC = () => {
         // Wait for SSE to finish
     } catch (error) {
         console.error(error);
-        alert('安装请求失败');
+        toast.error('安装请求失败');
         setProgressVisible(false);
         setActiveApp(null);
     }
@@ -208,21 +221,27 @@ const App: React.FC = () => {
         await updateApp(app.appname);
     } catch (error) {
         console.error(error);
-        alert('更新请求失败');
+        toast.error('更新请求失败');
         setProgressVisible(false);
         setActiveApp(null);
     }
   };
 
-  const handleUninstall = async (app: AppInfo) => {
-    if (!confirm(`确定要卸载 ${app.display_name} 吗？`)) return;
+  const handleUninstall = (app: AppInfo) => {
+    setPendingUninstallApp(app);
+  };
+
+  const confirmUninstall = async () => {
+    if (!pendingUninstallApp) return;
+    const app = pendingUninstallApp;
+    setPendingUninstallApp(null);
     
     startOperation(app, '正在卸载');
     try {
         await uninstallApp(app.appname);
     } catch (error) {
         console.error(error);
-        alert('卸载请求失败');
+        toast.error('卸载请求失败');
         setProgressVisible(false);
         setActiveApp(null);
     }
@@ -242,93 +261,143 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white flex flex-col md:flex-row">
-      <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 h-screen sticky top-0">
-         <div className="p-6">
-            <h1 className="text-2xl font-bold text-blue-600 dark:text-blue-400">fnOS Apps</h1>
-            <p className="text-sm text-gray-500 mt-1">
+    <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row">
+      <aside className="hidden md:flex flex-col w-64 bg-card border-r border-border h-screen sticky top-0">
+         <div className="p-6 border-b border-border">
+            <h1 className="text-xl font-semibold tracking-tight">fnOS Apps</h1>
+            <p className="text-sm text-muted-foreground mt-1.5">
                上次检查: {lastCheck ? new Date(lastCheck).toLocaleString() : '从未'}
             </p>
          </div>
-         
-         <nav className="flex-1 px-4 space-y-2">
-            <Button 
-              variant={activeFilter === 'all' ? 'secondary' : 'ghost'} 
-              className="w-full justify-start"
-              onClick={() => setActiveFilter('all')}
-            >
-               <LayoutGrid className="mr-2 h-4 w-4" />
-               全部
-               <Badge variant="secondary" className="ml-auto">{counts.all}</Badge>
-            </Button>
-            <Button 
-              variant={activeFilter === 'installed' ? 'secondary' : 'ghost'} 
-              className="w-full justify-start"
-              onClick={() => setActiveFilter('installed')}
-            >
-               <CheckCircle2 className="mr-2 h-4 w-4" />
-               已安装
-               <Badge variant="secondary" className="ml-auto">{counts.installed}</Badge>
-            </Button>
-            <Button 
-              variant={activeFilter === 'update_available' ? 'secondary' : 'ghost'} 
-              className="w-full justify-start"
-              onClick={() => setActiveFilter('update_available')}
-            >
-               <RefreshCw className="mr-2 h-4 w-4" />
-               有更新
-               {counts.update_available > 0 && (
-                 <Badge variant="destructive" className="ml-auto">{counts.update_available}</Badge>
-               )}
-            </Button>
-         </nav>
 
-         <div className="p-4">
-            <Separator className="mb-4" />
-            <Button variant="ghost" className="w-full justify-start text-gray-500" onClick={() => setSettingsVisible(true)}>
-               <Settings className="mr-2 h-4 w-4" />
-               设置
-            </Button>
-         </div>
-      </aside>
+         <nav className="flex-1 p-4 space-y-1">
+            <Button
+               variant={activeFilter === 'all' ? 'secondary' : 'ghost'}
+               className="w-full justify-start h-10 px-3 shadow-none"
+               onClick={() => setActiveFilter('all')}
+             >
+                <LayoutGrid className="mr-3 h-4 w-4 shrink-0" />
+                <span className="flex-1 text-left">全部</span>
+                <span className="ml-auto text-xs text-muted-foreground tabular-nums">{counts.all}</span>
+             </Button>
+             <Button
+               variant={activeFilter === 'installed' ? 'secondary' : 'ghost'}
+               className="w-full justify-start h-10 px-3 shadow-none"
+               onClick={() => setActiveFilter('installed')}
+             >
+                <CheckCircle2 className="mr-3 h-4 w-4 shrink-0" />
+                <span className="flex-1 text-left">已安装</span>
+                <span className="ml-auto text-xs text-muted-foreground tabular-nums">{counts.installed}</span>
+             </Button>
+             <Button
+               variant={activeFilter === 'update_available' ? 'secondary' : 'ghost'}
+               className="w-full justify-start h-10 px-3 shadow-none"
+               onClick={() => setActiveFilter('update_available')}
+             >
+                <RefreshCw className="mr-3 h-4 w-4 shrink-0" />
+                <span className="flex-1 text-left">有更新</span>
+                {counts.update_available > 0 ? (
+                  <Badge variant="destructive" className="ml-auto shrink-0">{counts.update_available}</Badge>
+                ) : (
+                  <span className="ml-auto text-xs text-muted-foreground tabular-nums">0</span>
+                )}
+             </Button>
+          </nav>
+
+          <div className="p-4 mt-auto border-t border-border space-y-1">
+             <Button
+               variant="ghost"
+               className="w-full justify-start h-10 px-3 shadow-none text-muted-foreground hover:text-foreground"
+               onClick={() => window.open('https://github.com/conversun/fnos-apps/issues', '_blank')}
+             >
+                <MessageCircle className="mr-3 h-4 w-4 shrink-0" />
+                <span className="flex-1 text-left">问题反馈</span>
+             </Button>
+             <Button
+               variant="ghost"
+               className="w-full justify-start h-10 px-3 shadow-none text-muted-foreground hover:text-foreground"
+               onClick={() => setSettingsVisible(true)}
+             >
+                <Settings className="mr-3 h-4 w-4 shrink-0" />
+                <span className="flex-1 text-left">设置</span>
+             </Button>
+          </div>
+       </aside>
 
       <div className="flex-1 flex flex-col min-h-screen">
-        <div className="md:hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 sticky top-0 z-20">
-           <div className="flex justify-between items-center mb-4">
-              <h1 className="text-xl font-bold text-blue-600">fnOS Apps</h1>
-              <Button size="icon" variant="ghost" onClick={() => setSettingsVisible(true)}>
-                 <Settings className="h-5 w-5" />
-              </Button>
-           </div>
-           <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
-               <Button 
-                  variant={activeFilter === 'all' ? 'default' : 'outline'} 
-                  size="sm"
-                  onClick={() => setActiveFilter('all')}
-                  className="whitespace-nowrap"
-               >
-                  全部 ({counts.all})
-               </Button>
-               <Button 
-                  variant={activeFilter === 'installed' ? 'default' : 'outline'} 
-                  size="sm"
-                  onClick={() => setActiveFilter('installed')}
-                  className="whitespace-nowrap"
-               >
-                  已安装 ({counts.installed})
-               </Button>
-               <Button 
-                  variant={activeFilter === 'update_available' ? 'default' : 'outline'} 
-                  size="sm"
-                  onClick={() => setActiveFilter('update_available')}
-                  className="whitespace-nowrap"
-               >
-                  有更新 ({counts.update_available})
-               </Button>
-           </div>
+        <div className="md:hidden bg-card border-b border-border p-4 sticky top-0 z-20 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+                <Sheet>
+                    <SheetTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                            <Menu className="h-5 w-5" />
+                        </Button>
+                    </SheetTrigger>
+                    <SheetContent side="left" className="w-64 p-0">
+                         <div className="p-6 border-b border-border">
+                            <h1 className="text-xl font-semibold tracking-tight">fnOS Apps</h1>
+                            <p className="text-sm text-muted-foreground mt-1.5">
+                               上次检查: {lastCheck ? new Date(lastCheck).toLocaleString() : '从未'}
+                            </p>
+                         </div>
+                         <nav className="flex-1 p-4 space-y-1">
+                             <Button
+                               variant={activeFilter === 'all' ? 'secondary' : 'ghost'}
+                               className="w-full justify-start h-10 px-3 shadow-none"
+                               onClick={() => setActiveFilter('all')}
+                             >
+                                <LayoutGrid className="mr-3 h-4 w-4 shrink-0" />
+                                <span className="flex-1 text-left">全部</span>
+                                <span className="ml-auto text-xs text-muted-foreground tabular-nums">{counts.all}</span>
+                             </Button>
+                             <Button
+                               variant={activeFilter === 'installed' ? 'secondary' : 'ghost'}
+                               className="w-full justify-start h-10 px-3 shadow-none"
+                               onClick={() => setActiveFilter('installed')}
+                             >
+                                <CheckCircle2 className="mr-3 h-4 w-4 shrink-0" />
+                                <span className="flex-1 text-left">已安装</span>
+                                <span className="ml-auto text-xs text-muted-foreground tabular-nums">{counts.installed}</span>
+                             </Button>
+                             <Button
+                               variant={activeFilter === 'update_available' ? 'secondary' : 'ghost'}
+                               className="w-full justify-start h-10 px-3 shadow-none"
+                               onClick={() => setActiveFilter('update_available')}
+                             >
+                                <RefreshCw className="mr-3 h-4 w-4 shrink-0" />
+                                <span className="flex-1 text-left">有更新</span>
+                                {counts.update_available > 0 ? (
+                                  <Badge variant="destructive" className="ml-auto shrink-0">{counts.update_available}</Badge>
+                                ) : (
+                                  <span className="ml-auto text-xs text-muted-foreground tabular-nums">0</span>
+                                )}
+                             </Button>
+                          </nav>
+                          <div className="p-4 mt-auto border-t border-border space-y-1">
+                             <Button
+                               variant="ghost"
+                               className="w-full justify-start h-10 px-3 shadow-none text-muted-foreground hover:text-foreground"
+                               onClick={() => window.open('https://github.com/conversun/fnos-apps/issues', '_blank')}
+                             >
+                                <MessageCircle className="mr-3 h-4 w-4 shrink-0" />
+                                <span className="flex-1 text-left">问题反馈</span>
+                             </Button>
+                             <Button
+                               variant="ghost"
+                               className="w-full justify-start h-10 px-3 shadow-none text-muted-foreground hover:text-foreground"
+                               onClick={() => setSettingsVisible(true)}
+                             >
+                                <Settings className="mr-3 h-4 w-4 shrink-0" />
+                                <span className="flex-1 text-left">设置</span>
+                             </Button>
+                          </div>
+                    </SheetContent>
+                </Sheet>
+                <h1 className="text-xl font-bold">fnOS Apps</h1>
+            </div>
         </div>
 
-        <header className="hidden md:flex bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-8 py-4 justify-between items-center sticky top-0 z-10">
+        <header className="hidden md:flex bg-card border-b border-border px-8 py-4 justify-between items-center sticky top-0 z-10">
            <h2 className="text-lg font-medium">
               {activeFilter === 'all' && '全部应用'}
               {activeFilter === 'installed' && '已安装应用'}
@@ -338,7 +407,6 @@ const App: React.FC = () => {
                <Button 
                  onClick={handleCheck} 
                  disabled={checking}
-                 className={checking ? 'opacity-70 cursor-wait' : ''}
                >
                  {checking ? (
                    <>
@@ -379,6 +447,25 @@ const App: React.FC = () => {
             onClose={() => setSettingsVisible(false)}
         />
       )}
+      
+      <AlertDialog open={!!pendingUninstallApp} onOpenChange={(open) => !open && setPendingUninstallApp(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认卸载</AlertDialogTitle>
+            <AlertDialogDescription>
+              确定要卸载 {pendingUninstallApp?.display_name} 吗？此操作无法撤销。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmUninstall}>
+              确认卸载
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Toaster />
     </div>
   );
 };

@@ -1,2 +1,5 @@
 build/
 *.fpk
+var/
+.sisyphus/
+.DS_Store
