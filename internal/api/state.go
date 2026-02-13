@@ -24,9 +24,14 @@ func (s *Server) refreshRegistry(ctx context.Context) error {
 		return err
 	}
 
+	var installedTags map[string]string
+	if s.cacheStore != nil {
+		installedTags = s.cacheStore.InstalledTags()
+	}
+
 	now := time.Now()
 	s.mu.Lock()
-	s.registry.Merge(localApps, remoteApps)
+	s.registry.Merge(localApps, remoteApps, installedTags)
 	s.lastCheck = now
 	s.mu.Unlock()
 

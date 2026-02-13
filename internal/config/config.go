@@ -10,11 +10,26 @@ import (
 const (
 	DefaultCheckIntervalHours = 6
 	DefaultDataDir            = "/var/apps/fnos-apps-store/var"
+	DefaultMirror             = "ghfast"
 )
+
+var MirrorOptions = map[string]string{
+	"direct":   "",
+	"ghfast":   "https://ghfast.top/",
+	"gh-proxy": "https://gh-proxy.org/",
+}
+
+func MirrorPrefix(name string) string {
+	if prefix, ok := MirrorOptions[name]; ok {
+		return prefix
+	}
+	return MirrorOptions[DefaultMirror]
+}
 
 // Config holds the persistent store configuration.
 type Config struct {
-	CheckIntervalHours int `json:"check_interval_hours"`
+	CheckIntervalHours int    `json:"check_interval_hours"`
+	Mirror             string `json:"mirror"`
 }
 
 // Manager handles loading and saving config to disk.
@@ -39,6 +54,7 @@ func NewManager(dataDir string) *Manager {
 func defaultConfig() Config {
 	return Config{
 		CheckIntervalHours: DefaultCheckIntervalHours,
+		Mirror:             DefaultMirror,
 	}
 }
 
@@ -65,6 +81,9 @@ func (m *Manager) LoadConfig() (Config, error) {
 	if cfg.CheckIntervalHours < 1 {
 		cfg.CheckIntervalHours = DefaultCheckIntervalHours
 	}
+	if cfg.Mirror == "" {
+		cfg.Mirror = DefaultMirror
+	}
 
 	m.cfg = cfg
 	return m.cfg, nil
@@ -74,6 +93,9 @@ func (m *Manager) LoadConfig() (Config, error) {
 func (m *Manager) SaveConfig(cfg Config) error {
 	if cfg.CheckIntervalHours < 1 {
 		cfg.CheckIntervalHours = DefaultCheckIntervalHours
+	}
+	if cfg.Mirror == "" {
+		cfg.Mirror = DefaultMirror
 	}
 
 	m.mu.Lock()

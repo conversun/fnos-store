@@ -33,11 +33,11 @@ func (a *LinuxAppCenter) run(args ...string) (string, error) {
 }
 
 func (a *LinuxAppCenter) List() ([]InstalledApp, error) {
-	_, err := a.run("list")
+	out, err := a.run("list")
 	if err != nil {
 		return nil, err
 	}
-	return nil, fmt.Errorf("List parsing not yet implemented")
+	return parseListTable(out)
 }
 
 func (a *LinuxAppCenter) Check(appname string) (bool, error) {

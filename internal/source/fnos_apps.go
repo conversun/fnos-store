@@ -12,13 +12,13 @@ import (
 	"slices"
 	"time"
 
+	"fnos-store/internal/config"
 	"fnos-store/internal/platform"
 )
 
 const (
 	defaultAppsJSONURL = "https://raw.githubusercontent.com/conversun/fnos-apps/main/apps.json"
 	githubReleaseBase  = "https://github.com/conversun/fnos-apps/releases/download"
-	ghfastPrefix       = "https://ghfast.top/"
 )
 
 type FNOSAppsSource struct {
@@ -27,6 +27,7 @@ type FNOSAppsSource struct {
 	cachePath  string
 	platform   string
 	name       string
+	configMgr  *config.Manager
 }
 
 type appsJSONPayload struct {
@@ -34,33 +35,27 @@ type appsJSONPayload struct {
 }
 
 type appsJSONEntry struct {
-	AppName     string   `json:"appname"`
-	DisplayName string   `json:"display_name"`
-	Description string   `json:"description"`
-	Version     string   `json:"version"`
-	FpkVersion  string   `json:"fpk_version"`
-	ReleaseTag  string   `json:"release_tag"`
-	FilePrefix  string   `json:"file_prefix"`
-	ServicePort int      `json:"service_port"`
-	IconURL     string   `json:"icon_url"`
-	Platforms   []string `json:"platforms"`
+	AppName     string            `json:"appname"`
+	DisplayName string            `json:"display_name"`
+	Description string            `json:"description"`
+	Version     string            `json:"version"`
+	FpkVersion  string            `json:"fpk_version"`
+	ReleaseTag  string            `json:"release_tag"`
+	FilePrefix  string            `json:"file_prefix"`
+	ServicePort int               `json:"service_port"`
+	IconURL     string            `json:"icon_url"`
+	Platforms   []string          `json:"platforms"`
+	FpkURLs     map[string]string `json:"fpk_urls,omitempty"` // per-platform override: {"x86": "https://...", "arm": "https://..."}
 }
 
-func NewFNOSAppsSource(cachePath string) *FNOSAppsSource {
-	return NewFNOSAppsSourceWithEndpoint(defaultAppsJSONURL, cachePath)
-}
-
-func NewFNOSAppsSourceWithEndpoint(appsURL, cachePath string) *FNOSAppsSource {
-	if appsURL == "" {
-		appsURL = defaultAppsJSONURL
-	}
-
+func NewFNOSAppsSource(cachePath string, cfgMgr *config.Manager) *FNOSAppsSource {
 	return &FNOSAppsSource{
 		httpClient: &http.Client{Timeout: 20 * time.Second},
-		appsURL:    appsURL,
+		appsURL:    defaultAppsJSONURL,
 		cachePath:  cachePath,
 		platform:   platform.DetectPlatform(),
 		name:       "fnos-apps",
+		configMgr:  cfgMgr,
 	}
 }
 
@@ -69,6 +64,13 @@ func (s *FNOSAppsSource) Name() string {
 		return "fnos-apps"
 	}
 	return s.name
+}
+
+func (s *FNOSAppsSource) mirrorPrefix() string {
+	if s.configMgr == nil {
+		return config.MirrorPrefix(config.DefaultMirror)
+	}
+	return config.MirrorPrefix(s.configMgr.Get().Mirror)
 }
 
 func (s *FNOSAppsSource) FetchApps(ctx context.Context) ([]RemoteApp, error) {
@@ -87,7 +89,27 @@ func (s *FNOSAppsSource) FetchApps(ctx context.Context) ([]RemoteApp, error) {
 }
 
 func (s *FNOSAppsSource) fetchRemote(ctx context.Context) ([]RemoteApp, []byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.appsURL, nil)
+	prefix := s.mirrorPrefix()
+
+	urls := make([]string, 0, 2)
+	if prefix != "" {
+		urls = append(urls, prefix+s.appsURL)
+	}
+	urls = append(urls, s.appsURL)
+
+	var lastErr error
+	for _, u := range urls {
+		apps, raw, err := s.fetchURL(ctx, u)
+		if err == nil {
+			return apps, raw, nil
+		}
+		lastErr = err
+	}
+	return nil, nil, lastErr
+}
+
+func (s *FNOSAppsSource) fetchURL(ctx context.Context, url string) ([]RemoteApp, []byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("build apps.json request: %w", err)
 	}
@@ -121,22 +143,28 @@ func (s *FNOSAppsSource) decodeApps(raw []byte) ([]RemoteApp, error) {
 		return nil, fmt.Errorf("decode apps.json: %w", err)
 	}
 
+	prefix := s.mirrorPrefix()
 	apps := make([]RemoteApp, 0, len(payload.Apps))
 	for _, item := range payload.Apps {
 		if !s.supportsPlatform(item.Platforms) {
 			continue
 		}
 
-		directURL := fmt.Sprintf(
-			"%s/%s/%s_%s_%s.fpk",
-			githubReleaseBase,
-			item.ReleaseTag,
-			item.FilePrefix,
-			item.FpkVersion,
-			s.platform,
-		)
+		var directURL string
+		if override, ok := item.FpkURLs[s.platform]; ok && override != "" {
+			directURL = override
+		} else {
+			directURL = fmt.Sprintf(
+				"%s/%s/%s_%s_%s.fpk",
+				githubReleaseBase,
+				item.ReleaseTag,
+				item.FilePrefix,
+				item.FpkVersion,
+				s.platform,
+			)
+		}
 
-		apps = append(apps, RemoteApp{
+		app := RemoteApp{
 			AppName:     item.AppName,
 			DisplayName: item.DisplayName,
 			Version:     item.Version,
@@ -147,10 +175,18 @@ func (s *FNOSAppsSource) decodeApps(raw []byte) ([]RemoteApp, error) {
 			ServicePort: item.ServicePort,
 			Platforms:   item.Platforms,
 			FpkURL:      directURL,
-			MirrorURL:   ghfastPrefix + directURL,
 			IconURL:     item.IconURL,
 			Source:      s.Name(),
-		})
+		}
+
+		if prefix != "" {
+			app.MirrorURL = prefix + directURL
+			if item.IconURL != "" {
+				app.IconURL = prefix + item.IconURL
+			}
+		}
+
+		apps = append(apps, app)
 	}
 
 	return apps, nil

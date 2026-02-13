@@ -16,7 +16,8 @@ type Store struct {
 }
 
 type metadata struct {
-	LastCheckAt time.Time `json:"last_check_at"`
+	LastCheckAt   time.Time         `json:"last_check_at"`
+	InstalledTags map[string]string `json:"installed_tags,omitempty"`
 }
 
 func NewStore(dataDir string) *Store {
@@ -66,6 +67,44 @@ func (s *Store) persistMeta() {
 		return
 	}
 	_ = os.WriteFile(s.metaPath(), raw, 0o644)
+}
+
+func (s *Store) GetInstalledTag(appname string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.meta.InstalledTags == nil {
+		return ""
+	}
+	return s.meta.InstalledTags[appname]
+}
+
+func (s *Store) SetInstalledTag(appname, releaseTag string) {
+	s.mu.Lock()
+	if s.meta.InstalledTags == nil {
+		s.meta.InstalledTags = make(map[string]string)
+	}
+	s.meta.InstalledTags[appname] = releaseTag
+	s.mu.Unlock()
+
+	s.persistMeta()
+}
+
+func (s *Store) RemoveInstalledTag(appname string) {
+	s.mu.Lock()
+	delete(s.meta.InstalledTags, appname)
+	s.mu.Unlock()
+
+	s.persistMeta()
+}
+
+func (s *Store) InstalledTags() map[string]string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]string, len(s.meta.InstalledTags))
+	for k, v := range s.meta.InstalledTags {
+		out[k] = v
+	}
+	return out
 }
 
 // CleanupStaleFiles removes temporary/orphaned cache files on startup.

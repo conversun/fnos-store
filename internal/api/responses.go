@@ -6,6 +6,7 @@ type appResponse struct {
 	Installed        bool   `json:"installed"`
 	InstalledVersion string `json:"installed_version"`
 	LatestVersion    string `json:"latest_version"`
+	AvailableVersion string `json:"available_version,omitempty"`
 	HasUpdate        bool   `json:"has_update"`
 	Platform         string `json:"platform"`
 	ReleaseURL       string `json:"release_url"`
@@ -40,6 +41,12 @@ type statusResponse struct {
 type uninstallResponse struct {
 	Status  string `json:"status"`
 	AppName string `json:"appname"`
+}
+
+type storeUpdateResponse struct {
+	CurrentVersion   string `json:"current_version"`
+	AvailableVersion string `json:"available_version,omitempty"`
+	HasUpdate        bool   `json:"has_update"`
 }
 
 type errorResponse struct {

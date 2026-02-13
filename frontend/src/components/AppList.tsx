@@ -27,7 +27,7 @@ const getEmptyMessage = (filterType?: string) => {
 const AppList: React.FC<AppListProps> = ({ apps, loading, onInstall, onUpdate, onUninstall, filterType }) => {
   if (loading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {[...Array(6)].map((_, i) => (
           <div key={i} className="flex flex-col space-y-3">
             <Skeleton className="h-[125px] w-full rounded-xl" />
@@ -53,7 +53,7 @@ const AppList: React.FC<AppListProps> = ({ apps, loading, onInstall, onUpdate, o
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       {apps.map((app) => (
         <AppCard
           key={app.appname}

@@ -21,6 +21,10 @@ func (s *Server) handleUninstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.cacheStore != nil {
+		s.cacheStore.RemoveInstalledTag(appname)
+	}
+
 	if err := s.refreshRegistry(r.Context()); err != nil {
 		writeAPIError(w, http.StatusBadGateway, err.Error())
 		return

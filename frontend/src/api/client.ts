@@ -4,6 +4,7 @@ export interface AppInfo {
   installed: boolean;
   installed_version: string;
   latest_version: string;
+  available_version?: string;
   has_update: boolean;
   platform: string;
   release_url: string;
@@ -53,44 +54,86 @@ export const triggerCheck = async (): Promise<CheckResponse> => {
   return response.json();
 };
 
-export const installApp = async (appname: string): Promise<void> => {
-  const response = await fetch(`/api/apps/${appname}/install`, {
-    method: 'POST',
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to install app: ${response.statusText}`);
-  }
+export type SSECallback = (event: UpdateProgress) => void;
+
+export interface SSEHandle {
+  promise: Promise<void>;
+  cancel: () => void;
+}
+
+function streamSSE(url: string, onEvent: SSECallback): SSEHandle {
+  const controller = new AbortController();
+
+  const promise = (async () => {
+    const response = await fetch(url, { method: 'POST', signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`Request failed: ${response.statusText}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('No response body');
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        let pendingData = '';
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            pendingData = line.slice(6);
+          } else if (line === '' && pendingData) {
+            try {
+              onEvent(JSON.parse(pendingData));
+            } catch { /* ignore parse errors */ }
+            pendingData = '';
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  })();
+
+  return { promise, cancel: () => controller.abort() };
+}
+
+export const installApp = (appname: string, onEvent: SSECallback): SSEHandle => {
+  return streamSSE(`/api/apps/${appname}/install`, onEvent);
 };
 
-export const updateApp = async (appname: string): Promise<void> => {
-  const response = await fetch(`/api/apps/${appname}/update`, {
-    method: 'POST',
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to update app: ${response.statusText}`);
-  }
+export const updateApp = (appname: string, onEvent: SSECallback): SSEHandle => {
+  return streamSSE(`/api/apps/${appname}/update`, onEvent);
 };
 
-export const uninstallApp = async (appname: string): Promise<void> => {
-  const response = await fetch(`/api/apps/${appname}/uninstall`, {
-    method: 'POST',
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to uninstall app: ${response.statusText}`);
-  }
-};
-
-export const getSSEEventSource = (): EventSource => {
-  return new EventSource('/api/events');
+export const uninstallApp = (appname: string, onEvent: SSECallback): SSEHandle => {
+  return streamSSE(`/api/apps/${appname}/uninstall`, onEvent);
 };
 
 export interface Settings {
   check_interval_hours: number;
+  mirror: string;
+  mirror_options?: string[];
 }
 
 export interface StatusResponse {
   version?: string;
   platform: string;
+}
+
+export interface StoreUpdateInfo {
+  current_version: string;
+  available_version?: string;
+  has_update: boolean;
 }
 
 export const fetchSettings = async (): Promise<Settings> => {
@@ -120,4 +163,16 @@ export const fetchStatus = async (): Promise<StatusResponse> => {
     throw new Error(`Failed to fetch status: ${response.statusText}`);
   }
   return response.json();
+};
+
+export const fetchStoreUpdate = async (): Promise<StoreUpdateInfo> => {
+  const response = await fetch('/api/store-update');
+  if (!response.ok) {
+    throw new Error(`Failed to fetch store update info: ${response.statusText}`);
+  }
+  return response.json();
+};
+
+export const triggerStoreUpdate = (onEvent: SSECallback): SSEHandle => {
+  return streamSSE('/api/store-update', onEvent);
 };

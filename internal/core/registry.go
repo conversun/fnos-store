@@ -46,7 +46,7 @@ func NewRegistry() *Registry {
 	}
 }
 
-func (r *Registry) Merge(local []Manifest, remote []source.RemoteApp) []AppInfo {
+func (r *Registry) Merge(local []Manifest, remote []source.RemoteApp, installedTags map[string]string) []AppInfo {
 	localByName := make(map[string]Manifest, len(local))
 	for _, item := range local {
 		localByName[item.AppName] = item
@@ -82,8 +82,9 @@ func (r *Registry) Merge(local []Manifest, remote []source.RemoteApp) []AppInfo 
 				app.Platform = localManifest.Platform
 			}
 
-			revisionUpdate := hasRevisionUpdate(item.ReleaseTag, localManifest.Version)
 			versionCmp := CompareVersions(localManifest.Version, item.Version)
+			installedTag := installedTags[item.AppName]
+			revisionUpdate := installedTag != item.ReleaseTag && hasRevisionUpdate(item.ReleaseTag, localManifest.Version)
 			if versionCmp < 0 || revisionUpdate {
 				app.Status = AppStatusUpdateAvailable
 			} else {

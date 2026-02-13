@@ -12,23 +12,29 @@ import (
 )
 
 type installPipeline struct {
-	downloads *core.Downloader
-	ac        platform.AppCenter
-	queue     *OperationQueue
+	downloads  *core.Downloader
+	ac         platform.AppCenter
+	queue      *OperationQueue
+	cacheStore cacheTagStore
+}
+
+type cacheTagStore interface {
+	SetInstalledTag(appname, releaseTag string)
+	RemoveInstalledTag(appname string)
 }
 
 // Caller must os.Remove the returned file.
 func (p *installPipeline) downloadFpk(ctx context.Context, stream *sseStream, app core.AppInfo) (string, error) {
 	if p.downloads == nil {
-		return "", errors.New("downloader not configured")
+		return "", errors.New("下载器未配置")
 	}
 
 	fileName := path.Base(app.DownloadURL)
 	if fileName == "." || fileName == "/" || fileName == "" {
-		return "", errors.New("invalid download url")
+		return "", errors.New("下载地址无效")
 	}
 
-	_ = stream.sendProgress(progressPayload{Step: "downloading", Progress: 0})
+	_ = stream.sendProgress(progressPayload{Step: "downloading", Progress: 0, Message: "正在下载..."})
 
 	fpkPath, err := p.downloads.Download(ctx, core.DownloadRequest{
 		MirrorURL: app.MirrorURL,
@@ -64,6 +70,12 @@ func (p *installPipeline) installFpk(fpkPath string, volume int) error {
 	})
 }
 
+func (p *installPipeline) startApp(appname string) error {
+	return p.queue.WithCLI(func() error {
+		return p.ac.Start(appname)
+	})
+}
+
 func (p *installPipeline) verifyInstalled(appname string) error {
 	var installed bool
 	err := p.queue.WithCLI(func() error {
@@ -75,7 +87,7 @@ func (p *installPipeline) verifyInstalled(appname string) error {
 		return err
 	}
 	if !installed {
-		return fmt.Errorf("app not installed after operation")
+		return fmt.Errorf("安装后验证失败，应用未正确安装")
 	}
 	return nil
 }
@@ -88,7 +100,7 @@ func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, op
 	}
 	defer os.Remove(fpkPath)
 
-	_ = stream.sendProgress(progressPayload{Step: "installing", Message: "appcenter-cli install-fpk"})
+	_ = stream.sendProgress(progressPayload{Step: "installing", Message: "正在安装..."})
 
 	volume, err := p.resolveVolume()
 	if err != nil {
@@ -101,11 +113,21 @@ func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, op
 		return
 	}
 
-	_ = stream.sendProgress(progressPayload{Step: "verifying", Message: "checking install status"})
+	_ = stream.sendProgress(progressPayload{Step: "verifying", Message: "正在验证安装..."})
 
 	if err := p.verifyInstalled(app.AppName); err != nil {
 		_ = stream.sendError(err.Error())
 		return
+	}
+
+	_ = stream.sendProgress(progressPayload{Step: "starting", Message: "正在启动..."})
+	if err := p.startApp(app.AppName); err != nil {
+		_ = stream.sendError(err.Error())
+		return
+	}
+
+	if p.cacheStore != nil && app.ReleaseTag != "" {
+		p.cacheStore.SetInstalledTag(app.AppName, app.ReleaseTag)
 	}
 
 	if err := refreshFn(ctx); err != nil && !errors.Is(err, context.Canceled) {
@@ -113,7 +135,11 @@ func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, op
 		return
 	}
 
-	_ = stream.sendProgress(progressPayload{Step: "done", NewVersion: app.LatestVersion, Message: fmt.Sprintf("%s completed", opName)})
+	newVersion := app.FpkVersion
+	if newVersion == "" {
+		newVersion = app.LatestVersion
+	}
+	_ = stream.sendProgress(progressPayload{Step: "done", NewVersion: newVersion, Message: "操作完成"})
 }
 
 // fnOS kills this process during install-fpk; no verification afterwards.

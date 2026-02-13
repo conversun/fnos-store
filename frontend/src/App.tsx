@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Badge } from './components/ui/badge';
 import AppList from './components/AppList';
 import ProgressOverlay from './components/ProgressOverlay';
 import SettingsDialog from './components/SettingsDialog';
-import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp, getSSEEventSource, fetchStatus } from './api/client';
-import type { AppInfo, UpdateProgress } from './api/client';
+import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp, fetchStatus, triggerStoreUpdate } from './api/client';
+import type { AppInfo, UpdateProgress, SSECallback, SSEHandle } from './api/client';
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
@@ -26,142 +26,82 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [checking, setChecking] = useState<boolean>(false);
   const [lastCheck, setLastCheck] = useState<string>('');
-  const [isUpdatingStore, setIsUpdatingStore] = useState(false);
-  
   // Progress state
   const [progressVisible, setProgressVisible] = useState(false);
   const [progressState, setProgressState] = useState<UpdateProgress>({ step: '', progress: 0, message: '' });
-  const [activeApp, setActiveApp] = useState<string | null>(null);
 
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'installed' | 'update_available'>('all');
   const [pendingUninstallApp, setPendingUninstallApp] = useState<AppInfo | null>(null);
-
-  // SSE Reference to close it on unmount
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const cancelRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     loadApps();
-    
-    // Setup SSE connection
-    const es = getSSEEventSource();
-    eventSourceRef.current = es;
-
-    es.onopen = () => {
-      console.log('SSE Connected');
-    };
-
-    es.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        handleServerEvent(data);
-      } catch (e) {
-        // Ignore parse errors (e.g. heartbeat)
-      }
-    };
-
-    es.onerror = (err) => {
-      console.error('SSE Error', err);
-      // Optional: Reconnect logic is usually handled by browser, but we might want to log it
-    };
-
-    return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-    };
   }, []);
 
-  useEffect(() => {
-    if (!isUpdatingStore) return;
+  const handleSSEEvent: SSECallback = (data) => {
+    if (data.step === 'self_update') {
+      setProgressState({ step: 'updating_store', progress: 100, message: '商店正在更新，请稍候...' });
+      setProgressVisible(true);
+      pollForRestart();
+      return;
+    }
 
-    let retries = 0;
-    const maxRetries = 30;
-    
+    if (data.step === 'error') {
+      toast.error(data.message || '发生未知错误');
+      setProgressVisible(false);
+      loadApps();
+      return;
+    }
+
+    if (data.step === 'done') {
+      setProgressVisible(false);
+      loadApps();
+      return;
+    }
+
     setProgressState({
-        step: 'updating_store',
-        progress: 100,
-        message: '商店正在更新，请稍候...'
+      step: data.step || 'processing',
+      progress: data.progress || 0,
+      message: data.message || translateStep(data.step),
     });
-    setProgressVisible(true);
+  };
 
+  const pollForRestart = () => {
+    let retries = 0;
     const poll = async () => {
       try {
         await fetchStatus();
         window.location.reload();
-      } catch (error) {
+      } catch {
         retries++;
-        if (retries > maxRetries) {
-          setProgressState({
-            step: 'error',
-            progress: 100,
-            message: '重启超时，请手动刷新页面',
-            type: 'error'
-          });
+        if (retries > 30) {
+          setProgressState({ step: 'error', progress: 100, message: '重启超时，请手动刷新页面' });
           return;
         }
-        
-        setProgressState({
-            step: 'restarting',
-            progress: 100,
-            message: '正在重启...'
-        });
-        
+        setProgressState({ step: 'restarting', progress: 100, message: '正在重启...' });
         setTimeout(poll, 2000);
       }
     };
-
     setTimeout(poll, 2000);
-
-  }, [isUpdatingStore]);
-
-  const handleServerEvent = (data: any) => {
-    if (data.type === 'connected') return;
-
-    if (data.type === 'self_update') {
-        setIsUpdatingStore(true);
-        if (eventSourceRef.current) {
-            eventSourceRef.current.close();
-            eventSourceRef.current = null;
-        }
-        return;
-    }
-
-    // If we have an active app, and this event is for that app (or missing app field implies current context)
-    // We prioritize events that match the active app.
-    if (activeApp && (data.app === activeApp || !data.app)) {
-        if (data.type === 'error') {
-            toast.error(data.error || '发生未知错误');
-            setProgressVisible(false);
-            setActiveApp(null);
-            loadApps(); // Refresh to ensure consistent state
-            return;
-        }
-        
-        if (data.step === 'done') {
-            setProgressVisible(false);
-            setActiveApp(null);
-            loadApps(); // Refresh list
-            return;
-        }
-
-        setProgressState({
-            step: data.step || 'processing',
-            progress: data.progress || 0,
-            message: data.message || translateStep(data.step),
-            type: data.type
-        });
-    } else if (data.app && !activeApp) {
-        // Background update or from another session?
-        // We could show a toast, but for now ignore.
-    }
   };
+
+  const handleCancel = useCallback(() => {
+    if (cancelRef.current) {
+      cancelRef.current();
+      cancelRef.current = null;
+    }
+    setProgressVisible(false);
+    toast.info('已取消');
+    loadApps();
+  }, []);
 
   const translateStep = (step?: string) => {
       switch(step) {
           case 'downloading': return '正在下载...';
           case 'installing': return '正在安装...';
           case 'verifying': return '正在验证...';
+          case 'starting': return '正在启动...';
           case 'uninstalling': return '正在卸载...';
           default: return '处理中...';
       }
@@ -193,38 +133,36 @@ const App: React.FC = () => {
   };
 
   const startOperation = (app: AppInfo, action: string) => {
-      setActiveApp(app.appname);
-      setProgressVisible(true);
-      setProgressState({
-          step: 'starting',
-          progress: 0,
-          message: `${action} ${app.display_name}...`
-      });
+    setProgressVisible(true);
+    setProgressState({
+      step: 'starting',
+      progress: 0,
+      message: `${action} ${app.display_name}...`,
+    });
+  };
+
+  const runSSEOperation = async (handle: SSEHandle, errorMsg: string) => {
+    cancelRef.current = handle.cancel;
+    try {
+      await handle.promise;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      console.error(error);
+      toast.error(errorMsg);
+      setProgressVisible(false);
+    } finally {
+      cancelRef.current = null;
+    }
   };
 
   const handleInstall = async (app: AppInfo) => {
     startOperation(app, '正在安装');
-    try {
-        await installApp(app.appname);
-        // Wait for SSE to finish
-    } catch (error) {
-        console.error(error);
-        toast.error('安装请求失败');
-        setProgressVisible(false);
-        setActiveApp(null);
-    }
+    await runSSEOperation(installApp(app.appname, handleSSEEvent), '安装请求失败');
   };
 
   const handleUpdate = async (app: AppInfo) => {
     startOperation(app, '正在更新');
-    try {
-        await updateApp(app.appname);
-    } catch (error) {
-        console.error(error);
-        toast.error('更新请求失败');
-        setProgressVisible(false);
-        setActiveApp(null);
-    }
+    await runSSEOperation(updateApp(app.appname, handleSSEEvent), '更新请求失败');
   };
 
   const handleUninstall = (app: AppInfo) => {
@@ -237,14 +175,13 @@ const App: React.FC = () => {
     setPendingUninstallApp(null);
     
     startOperation(app, '正在卸载');
-    try {
-        await uninstallApp(app.appname);
-    } catch (error) {
-        console.error(error);
-        toast.error('卸载请求失败');
-        setProgressVisible(false);
-        setActiveApp(null);
-    }
+    await runSSEOperation(uninstallApp(app.appname, handleSSEEvent), '卸载请求失败');
+  };
+
+  const handleStoreUpdate = async () => {
+    setProgressVisible(true);
+    setProgressState({ step: 'downloading', progress: 0, message: '正在更新商店...' });
+    await runSSEOperation(triggerStoreUpdate(handleSSEEvent), '商店更新失败');
   };
 
   const filteredApps = apps.filter(app => {
@@ -439,12 +376,14 @@ const App: React.FC = () => {
         visible={progressVisible}
         message={progressState.message || ''}
         progress={progressState.progress || 0}
+        onCancel={progressState.step === 'downloading' ? handleCancel : undefined}
       />
       
       {settingsVisible && (
         <SettingsDialog
             visible={settingsVisible}
             onClose={() => setSettingsVisible(false)}
+            onStoreUpdate={handleStoreUpdate}
         />
       )}
       

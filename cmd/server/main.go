@@ -42,7 +42,7 @@ func main() {
 	cacheStore.CleanupStaleFiles()
 
 	ac := platform.NewAppCenter(projectRoot)
-	src := source.NewFNOSAppsSource(cachePath)
+	src := source.NewFNOSAppsSource(cachePath, cfgMgr)
 	reg := core.NewRegistry()
 	downloader := core.NewDownloader(downloadDir)
 	if err := downloader.CleanupStaleTmpFiles(); err != nil {

@@ -11,6 +11,9 @@ func (s *Server) handleListApps(w http.ResponseWriter, r *http.Request) {
 	apps := s.listRegistryApps()
 	respApps := make([]appResponse, 0, len(apps))
 	for _, app := range apps {
+		if s.storeApp != "" && app.AppName == s.storeApp {
+			continue
+		}
 		status := ""
 		if app.Installed {
 			status = s.getRuntimeStatus(app.AppName)
@@ -24,13 +27,20 @@ func (s *Server) handleListApps(w http.ResponseWriter, r *http.Request) {
 			releaseURL = fmt.Sprintf("https://github.com/conversun/fnos-apps/releases/tag/%s", app.ReleaseTag)
 		}
 
+		hasUpdate := app.Status == core.AppStatusUpdateAvailable
+		availableVersion := ""
+		if hasUpdate && app.FpkVersion != "" {
+			availableVersion = app.FpkVersion
+		}
+
 		respApps = append(respApps, appResponse{
 			AppName:          app.AppName,
 			DisplayName:      app.DisplayName,
 			Installed:        app.Installed,
 			InstalledVersion: app.InstalledVersion,
 			LatestVersion:    app.LatestVersion,
-			HasUpdate:        app.Status == core.AppStatusUpdateAvailable,
+			AvailableVersion: availableVersion,
+			HasUpdate:        hasUpdate,
 			Platform:         app.Platform,
 			ReleaseURL:       releaseURL,
 			ReleaseNotes:     "",

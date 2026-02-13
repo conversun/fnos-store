@@ -59,9 +59,10 @@ func NewServer(cfg Config) *Server {
 		registry: cfg.Registry,
 		queue:    queue,
 		pipeline: &installPipeline{
-			downloads: cfg.Downloader,
-			ac:        cfg.AppCenter,
-			queue:     queue,
+			downloads:  cfg.Downloader,
+			ac:         cfg.AppCenter,
+			queue:      queue,
+			cacheStore: cfg.CacheStore,
 		},
 		configMgr:   cfg.ConfigMgr,
 		cacheStore:  cfg.CacheStore,
@@ -86,6 +87,8 @@ func (s *Server) routes() {
 	s.Mux.HandleFunc("GET /api/status", s.handleStatus)
 	s.Mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	s.Mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
+	s.Mux.HandleFunc("GET /api/store-update", s.handleGetStoreUpdate)
+	s.Mux.HandleFunc("POST /api/store-update", s.handlePostStoreUpdate)
 	s.Mux.HandleFunc("/", s.handleSPA)
 }
 
