@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu } from 'lucide-react';
+import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Badge } from './components/ui/badge';
 import AppList from './components/AppList';
@@ -11,6 +11,8 @@ import type { AppInfo, UpdateProgress, SSECallback, SSEHandle } from './api/clie
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip"
+import { cn } from "@/lib/utils"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,6 +39,17 @@ const App: React.FC = () => {
   const [detailApp, setDetailApp] = useState<AppInfo | null>(null);
   const cancelRef = useRef<(() => void) | null>(null);
   const operationDoneRef = useRef(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() =>
+    localStorage.getItem('sidebar-collapsed') === 'true'
+  );
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem('sidebar-collapsed', String(next));
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     loadApps();
@@ -216,66 +229,134 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row">
-      <aside className="hidden md:flex flex-col w-64 bg-card border-r border-border h-screen sticky top-0">
-         <div className="p-6 border-b border-border">
-            <h1 className="text-xl font-semibold tracking-tight">fnOS Apps</h1>
-            <p className="text-sm text-muted-foreground mt-1.5">
-               上次检查: {lastCheck ? new Date(lastCheck).toLocaleString() : '从未'}
-            </p>
+      <aside className={cn(
+        "hidden md:flex flex-col bg-card border-r border-border h-screen sticky top-0 transition-all duration-300 overflow-hidden",
+        sidebarCollapsed ? "w-[68px]" : "w-64"
+      )}>
+        <TooltipProvider delayDuration={0}>
+         <div className={cn("border-b border-border shrink-0", sidebarCollapsed ? "p-3 flex items-center justify-center" : "p-6")}>
+           {sidebarCollapsed ? (
+             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleSidebar}>
+               <ChevronsRight className="h-4 w-4" />
+             </Button>
+           ) : (
+             <div className="flex items-start justify-between gap-2">
+               <div className="min-w-0">
+                 <h1 className="text-xl font-semibold tracking-tight whitespace-nowrap">fnOS Apps</h1>
+                 <p className="text-sm text-muted-foreground mt-1.5 whitespace-nowrap">
+                    上次检查: {lastCheck ? new Date(lastCheck).toLocaleString() : '从未'}
+                 </p>
+               </div>
+               <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 -mr-2 -mt-1" onClick={toggleSidebar}>
+                 <ChevronsLeft className="h-4 w-4" />
+               </Button>
+             </div>
+           )}
          </div>
 
-         <nav className="flex-1 p-4 space-y-1">
-            <Button
-               variant={activeFilter === 'all' ? 'secondary' : 'ghost'}
-               className="w-full justify-start h-10 px-3 shadow-none"
-               onClick={() => setActiveFilter('all')}
-             >
-                <LayoutGrid className="mr-3 h-4 w-4 shrink-0" />
-                <span className="flex-1 text-left">全部</span>
-                <span className="ml-auto text-xs text-muted-foreground tabular-nums">{counts.all}</span>
-             </Button>
-             <Button
-               variant={activeFilter === 'installed' ? 'secondary' : 'ghost'}
-               className="w-full justify-start h-10 px-3 shadow-none"
-               onClick={() => setActiveFilter('installed')}
-             >
-                <CheckCircle2 className="mr-3 h-4 w-4 shrink-0" />
-                <span className="flex-1 text-left">已安装</span>
-                <span className="ml-auto text-xs text-muted-foreground tabular-nums">{counts.installed}</span>
-             </Button>
-             <Button
-               variant={activeFilter === 'update_available' ? 'secondary' : 'ghost'}
-               className="w-full justify-start h-10 px-3 shadow-none"
-               onClick={() => setActiveFilter('update_available')}
-             >
-                <RefreshCw className="mr-3 h-4 w-4 shrink-0" />
-                <span className="flex-1 text-left">有更新</span>
-                {counts.update_available > 0 ? (
-                  <Badge variant="destructive" className="ml-auto shrink-0">{counts.update_available}</Badge>
-                ) : (
-                  <span className="ml-auto text-xs text-muted-foreground tabular-nums">0</span>
-                )}
-             </Button>
-          </nav>
+         <nav className={cn("flex-1 space-y-1", sidebarCollapsed ? "p-2" : "p-4")}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={activeFilter === 'all' ? 'secondary' : 'ghost'}
+                  className={cn("w-full h-10 shadow-none", sidebarCollapsed ? "justify-center px-0" : "justify-start px-3")}
+                  onClick={() => setActiveFilter('all')}
+                >
+                  <LayoutGrid className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
+                  {!sidebarCollapsed && (
+                    <>
+                      <span className="flex-1 text-left whitespace-nowrap">全部</span>
+                      <span className="ml-auto text-xs text-muted-foreground tabular-nums">{counts.all}</span>
+                    </>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              {sidebarCollapsed && <TooltipContent side="right">全部 ({counts.all})</TooltipContent>}
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={activeFilter === 'installed' ? 'secondary' : 'ghost'}
+                  className={cn("w-full h-10 shadow-none", sidebarCollapsed ? "justify-center px-0" : "justify-start px-3")}
+                  onClick={() => setActiveFilter('installed')}
+                >
+                  <CheckCircle2 className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
+                  {!sidebarCollapsed && (
+                    <>
+                      <span className="flex-1 text-left whitespace-nowrap">已安装</span>
+                      <span className="ml-auto text-xs text-muted-foreground tabular-nums">{counts.installed}</span>
+                    </>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              {sidebarCollapsed && <TooltipContent side="right">已安装 ({counts.installed})</TooltipContent>}
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={activeFilter === 'update_available' ? 'secondary' : 'ghost'}
+                  className={cn("w-full h-10 shadow-none", sidebarCollapsed ? "justify-center px-0" : "justify-start px-3")}
+                  onClick={() => setActiveFilter('update_available')}
+                >
+                  <div className="relative shrink-0">
+                    <RefreshCw className={cn("h-4 w-4", !sidebarCollapsed && "mr-3")} />
+                    {sidebarCollapsed && counts.update_available > 0 && (
+                      <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-destructive" />
+                    )}
+                  </div>
+                  {!sidebarCollapsed && (
+                    <>
+                      <span className="flex-1 text-left whitespace-nowrap">有更新</span>
+                      {counts.update_available > 0 ? (
+                        <Badge variant="destructive" className="ml-auto shrink-0">{counts.update_available}</Badge>
+                      ) : (
+                        <span className="ml-auto text-xs text-muted-foreground tabular-nums">0</span>
+                      )}
+                    </>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              {sidebarCollapsed && (
+                <TooltipContent side="right">有更新 ({counts.update_available})</TooltipContent>
+              )}
+            </Tooltip>
+         </nav>
 
-          <div className="p-4 mt-auto border-t border-border space-y-1">
-             <Button
-               variant="ghost"
-               className="w-full justify-start h-10 px-3 shadow-none text-muted-foreground hover:text-foreground"
-               onClick={() => window.open('https://github.com/conversun/fnos-apps/issues', '_blank')}
-             >
-                <MessageCircle className="mr-3 h-4 w-4 shrink-0" />
-                <span className="flex-1 text-left">问题反馈</span>
-             </Button>
-             <Button
-               variant="ghost"
-               className="w-full justify-start h-10 px-3 shadow-none text-muted-foreground hover:text-foreground"
-               onClick={() => setSettingsVisible(true)}
-             >
-                <Settings className="mr-3 h-4 w-4 shrink-0" />
-                <span className="flex-1 text-left">设置</span>
-             </Button>
-          </div>
+         <div className={cn("mt-auto border-t border-border space-y-1", sidebarCollapsed ? "p-2" : "p-4")}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className={cn(
+                    "w-full h-10 shadow-none text-muted-foreground hover:text-foreground",
+                    sidebarCollapsed ? "justify-center px-0" : "justify-start px-3"
+                  )}
+                  onClick={() => window.open('https://github.com/conversun/fnos-apps/issues', '_blank')}
+                >
+                  <MessageCircle className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
+                  {!sidebarCollapsed && <span className="flex-1 text-left whitespace-nowrap">问题反馈</span>}
+                </Button>
+              </TooltipTrigger>
+              {sidebarCollapsed && <TooltipContent side="right">问题反馈</TooltipContent>}
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className={cn(
+                    "w-full h-10 shadow-none text-muted-foreground hover:text-foreground",
+                    sidebarCollapsed ? "justify-center px-0" : "justify-start px-3"
+                  )}
+                  onClick={() => setSettingsVisible(true)}
+                >
+                  <Settings className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
+                  {!sidebarCollapsed && <span className="flex-1 text-left whitespace-nowrap">设置</span>}
+                </Button>
+              </TooltipTrigger>
+              {sidebarCollapsed && <TooltipContent side="right">设置</TooltipContent>}
+            </Tooltip>
+         </div>
+        </TooltipProvider>
        </aside>
 
       <div className="flex-1 flex flex-col min-h-screen">
