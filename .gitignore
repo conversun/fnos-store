@@ -3,3 +3,4 @@ build/
 var/
 .sisyphus/
 .DS_Store
+store-server-linux-*
