@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
 
 	"fnos-store/internal/core"
@@ -23,7 +24,19 @@ type cacheTagStore interface {
 	RemoveInstalledTag(appname string)
 }
 
-// Caller must os.Remove the returned file.
+func (p *installPipeline) extractFpk(fpkPath string) (string, error) {
+	dir, err := os.MkdirTemp("", "fpk-install-*")
+	if err != nil {
+		return "", fmt.Errorf("创建临时目录失败: %w", err)
+	}
+	cmd := exec.Command("tar", "xzf", fpkPath, "-C", dir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		os.RemoveAll(dir)
+		return "", fmt.Errorf("解压 fpk 失败: %w: %s", err, string(out))
+	}
+	return dir, nil
+}
+
 func (p *installPipeline) downloadFpk(ctx context.Context, stream *sseStream, app core.AppInfo) (string, error) {
 	if p.downloads == nil {
 		return "", errors.New("下载器未配置")
@@ -142,7 +155,6 @@ func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, op
 	_ = stream.sendProgress(progressPayload{Step: "done", NewVersion: newVersion, Message: "操作完成"})
 }
 
-// fnOS kills this process during install-fpk; no verification afterwards.
 func (p *installPipeline) runSelfUpdate(ctx context.Context, stream *sseStream, app core.AppInfo) {
 	fpkPath, err := p.downloadFpk(ctx, stream, app)
 	if err != nil {
@@ -157,8 +169,15 @@ func (p *installPipeline) runSelfUpdate(ctx context.Context, stream *sseStream, 
 		return
 	}
 
+	dir, err := p.extractFpk(fpkPath)
+	if err != nil {
+		_ = stream.sendError(err.Error())
+		return
+	}
+
 	_ = stream.sendProgress(progressPayload{Step: "self_update", Message: "商店正在重启..."})
 
-	// Process will be killed by fnOS during install-fpk; no verification afterwards.
-	_ = p.installFpk(fpkPath, volume)
+	// Detached: appcenter-cli runs in a new session so it survives
+	// this process being killed during the uninstall phase.
+	_ = p.ac.InstallLocal(dir, volume, true)
 }

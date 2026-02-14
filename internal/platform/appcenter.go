@@ -22,7 +22,13 @@ type AppCenter interface {
 	Status(appname string) (string, error)
 
 	// InstallFpk installs or upgrades an app from an fpk file on the given volume.
+	// It extracts the fpk and uses install-local internally for upgrade support.
 	InstallFpk(fpkPath string, volume int) error
+
+	// InstallLocal installs or upgrades an app from an extracted fpk directory.
+	// When detach is true, the process is launched in a new session so it
+	// survives the caller being killed (used for self-update).
+	InstallLocal(dir string, volume int, detach bool) error
 
 	// Uninstall removes an installed app.
 	Uninstall(appname string) error

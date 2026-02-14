@@ -75,6 +75,11 @@ func (m *MockAppCenter) InstallFpk(fpkPath string, volume int) error {
 	return err
 }
 
+func (m *MockAppCenter) InstallLocal(dir string, volume int, detach bool) error {
+	_, err := m.run("install-local", "--dir", dir, "-v", strconv.Itoa(volume))
+	return err
+}
+
 func (m *MockAppCenter) Uninstall(appname string) error {
 	_, err := m.run("uninstall", appname)
 	return err
