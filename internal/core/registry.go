@@ -88,7 +88,7 @@ func (r *Registry) Merge(local []Manifest, remote []source.RemoteApp, installedT
 
 			versionCmp := CompareVersions(localManifest.Version, item.Version)
 			installedTag := installedTags[item.AppName]
-			revisionUpdate := installedTag != item.ReleaseTag && hasRevisionUpdate(item.ReleaseTag, localManifest.Version)
+			revisionUpdate := versionCmp == 0 && installedTag != item.ReleaseTag && hasRevisionUpdate(item.ReleaseTag, localManifest.Version)
 			if versionCmp < 0 || revisionUpdate {
 				app.Status = AppStatusUpdateAvailable
 			} else {
