@@ -79,6 +79,7 @@ function streamSSE(url: string, onEvent: SSECallback): SSEHandle {
 
     const decoder = new TextDecoder();
     let buffer = '';
+    let pendingData = '';
 
     try {
       while (true) {
@@ -89,7 +90,6 @@ function streamSSE(url: string, onEvent: SSECallback): SSEHandle {
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
 
-        let pendingData = '';
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             pendingData = line.slice(6);

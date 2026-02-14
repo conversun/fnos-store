@@ -36,6 +36,7 @@ const App: React.FC = () => {
   const [pendingUninstallApp, setPendingUninstallApp] = useState<AppInfo | null>(null);
   const [detailApp, setDetailApp] = useState<AppInfo | null>(null);
   const cancelRef = useRef<(() => void) | null>(null);
+  const operationDoneRef = useRef(false);
 
   useEffect(() => {
     loadApps();
@@ -50,6 +51,7 @@ const App: React.FC = () => {
     }
 
     if (data.step === 'error') {
+      operationDoneRef.current = true;
       toast.error(data.message || '发生未知错误');
       setProgressVisible(false);
       loadApps();
@@ -57,6 +59,7 @@ const App: React.FC = () => {
     }
 
     if (data.step === 'done') {
+      operationDoneRef.current = true;
       setProgressVisible(false);
       loadApps();
       return;
@@ -95,6 +98,11 @@ const App: React.FC = () => {
     }
     setProgressVisible(false);
     toast.info('已取消');
+    loadApps();
+  }, []);
+
+  const handleDismiss = useCallback(() => {
+    setProgressVisible(false);
     loadApps();
   }, []);
 
@@ -144,6 +152,7 @@ const App: React.FC = () => {
   };
 
   const runSSEOperation = async (handle: SSEHandle, errorMsg: string) => {
+    operationDoneRef.current = false;
     cancelRef.current = handle.cancel;
     try {
       await handle.promise;
@@ -151,9 +160,15 @@ const App: React.FC = () => {
       if (error instanceof DOMException && error.name === 'AbortError') return;
       console.error(error);
       toast.error(errorMsg);
-      setProgressVisible(false);
     } finally {
       cancelRef.current = null;
+      // Fallback: if handleSSEEvent never received "done"/"error" (e.g. event
+      // lost due to TCP chunking), ensure the overlay is dismissed and state is
+      // refreshed so the UI never gets permanently stuck.
+      if (!operationDoneRef.current) {
+        setProgressVisible(false);
+        loadApps();
+      }
     }
   };
 
@@ -380,6 +395,7 @@ const App: React.FC = () => {
         message={progressState.message || ''}
         progress={progressState.progress || 0}
         onCancel={progressState.step === 'downloading' ? handleCancel : undefined}
+        onDismiss={progressState.step !== 'downloading' ? handleDismiss : undefined}
       />
       
       {settingsVisible && (

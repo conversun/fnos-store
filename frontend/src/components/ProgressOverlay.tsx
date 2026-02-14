@@ -13,9 +13,10 @@ interface ProgressOverlayProps {
   message: string;
   progress: number;
   onCancel?: () => void;
+  onDismiss?: () => void;
 }
 
-const ProgressOverlay: React.FC<ProgressOverlayProps> = ({ visible, message, progress, onCancel }) => {
+const ProgressOverlay: React.FC<ProgressOverlayProps> = ({ visible, message, progress, onCancel, onDismiss }) => {
   return (
     <Dialog open={visible} onOpenChange={() => {}}>
       <DialogContent 
@@ -35,11 +36,17 @@ const ProgressOverlay: React.FC<ProgressOverlayProps> = ({ visible, message, pro
           <Progress value={progress} className="w-full" />
         </div>
 
-        {onCancel && (
+        {(onCancel || onDismiss) && (
           <div className="flex justify-end pt-2">
-            <Button variant="ghost" size="sm" onClick={onCancel}>
-              取消
-            </Button>
+            {onCancel ? (
+              <Button variant="ghost" size="sm" onClick={onCancel}>
+                取消
+              </Button>
+            ) : (
+              <Button variant="ghost" size="sm" onClick={onDismiss}>
+                关闭
+              </Button>
+            )}
           </div>
         )}
       </DialogContent>

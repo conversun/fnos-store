@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,8 +30,15 @@ func NewDownloader(downloadDir string) *Downloader {
 	if downloadDir == "" {
 		downloadDir = os.TempDir()
 	}
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout: 30 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+	}
 	return &Downloader{
-		httpClient:  &http.Client{Timeout: 60 * time.Second},
+		httpClient:  &http.Client{Transport: transport},
 		downloadDir: downloadDir,
 		tmpDir:      os.TempDir(),
 	}
