@@ -19,6 +19,8 @@ type AppInfo struct {
 	AppName           string
 	DisplayName       string
 	Description       string
+	HomepageURL       string
+	UpdatedAt         string
 	ServicePort       int
 	Platform          string
 	Source            string
@@ -60,6 +62,8 @@ func (r *Registry) Merge(local []Manifest, remote []source.RemoteApp, installedT
 			AppName:       item.AppName,
 			DisplayName:   item.DisplayName,
 			Description:   item.Description,
+			HomepageURL:   item.HomepageURL,
+			UpdatedAt:     item.UpdatedAt,
 			ServicePort:   item.ServicePort,
 			Platform:      strings.Join(item.Platforms, ","),
 			Source:        item.Source,

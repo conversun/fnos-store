@@ -8,7 +8,8 @@ import {
   RefreshCw, 
   Package,
   Circle,
-  ArrowRight
+  ArrowRight,
+  Info
 } from 'lucide-react';
 
 interface AppCardProps {
@@ -16,9 +17,10 @@ interface AppCardProps {
   onInstall: (app: AppInfo) => void;
   onUpdate: (app: AppInfo) => void;
   onUninstall?: (app: AppInfo) => void;
+  onDetail?: (app: AppInfo) => void;
 }
 
-const AppCard: React.FC<AppCardProps> = ({ app, onInstall, onUpdate }) => {
+const AppCard: React.FC<AppCardProps> = ({ app, onInstall, onUpdate, onDetail }) => {
   const isInstalled = app.installed;
   const canUpdate = isInstalled && app.has_update;
 
@@ -48,7 +50,7 @@ const AppCard: React.FC<AppCardProps> = ({ app, onInstall, onUpdate }) => {
     <Card className="relative overflow-hidden border border-border/30 bg-card shadow-[0_1px_3px_0_rgb(0_0_0/0.04)] rounded-xl">
       <div className="p-4 flex flex-col h-full gap-3">
 
-        <div className="flex items-start gap-3">
+        <div className="flex items-start gap-3 cursor-pointer" onClick={() => onDetail?.(app)}>
           <div className="shrink-0">
             {app.icon_url ? (
               <img
@@ -89,6 +91,16 @@ const AppCard: React.FC<AppCardProps> = ({ app, onInstall, onUpdate }) => {
           </div>
         </div>
 
+        {app.description && (
+          <p
+            className="text-xs text-muted-foreground line-clamp-2 leading-relaxed cursor-pointer hover:text-foreground transition-colors"
+            onClick={() => onDetail?.(app)}
+            title="点击查看详情"
+          >
+            {app.description}
+          </p>
+        )}
+
         <div className="flex-1" />
 
         <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/20">
@@ -107,6 +119,15 @@ const AppCard: React.FC<AppCardProps> = ({ app, onInstall, onUpdate }) => {
           </div>
 
           <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onDetail?.(app)}
+              className="rounded-full px-2.5 h-7 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <Info className="mr-1 h-3.5 w-3.5" />
+              详情
+            </Button>
 
             {!isInstalled ? (
               <Button

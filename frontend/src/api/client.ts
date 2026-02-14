@@ -1,6 +1,7 @@
 export interface AppInfo {
   appname: string;
   display_name: string;
+  description?: string;
   installed: boolean;
   installed_version: string;
   latest_version: string;
@@ -13,6 +14,7 @@ export interface AppInfo {
   service_port?: number;
   homepage?: string;
   icon_url?: string;
+  updated_at?: string;
 }
 
 export interface AppsResponse {

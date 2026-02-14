@@ -8,6 +8,8 @@ type RemoteApp struct {
 	DisplayName string
 	Version     string
 	Description string
+	HomepageURL string
+	UpdatedAt   string
 	ReleaseTag  string
 	FilePrefix  string
 	FpkVersion  string

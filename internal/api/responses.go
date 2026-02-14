@@ -3,6 +3,7 @@ package api
 type appResponse struct {
 	AppName          string `json:"appname"`
 	DisplayName      string `json:"display_name"`
+	Description      string `json:"description,omitempty"`
 	Installed        bool   `json:"installed"`
 	InstalledVersion string `json:"installed_version"`
 	LatestVersion    string `json:"latest_version"`
@@ -15,6 +16,7 @@ type appResponse struct {
 	ServicePort      int    `json:"service_port,omitempty"`
 	Homepage         string `json:"homepage,omitempty"`
 	IconURL          string `json:"icon_url,omitempty"`
+	UpdatedAt        string `json:"updated_at,omitempty"`
 }
 
 type appsListResponse struct {

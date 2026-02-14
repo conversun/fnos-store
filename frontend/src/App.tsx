@@ -3,6 +3,7 @@ import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu } fr
 import { Button } from './components/ui/button';
 import { Badge } from './components/ui/badge';
 import AppList from './components/AppList';
+import AppDetailDialog from './components/AppDetailDialog';
 import ProgressOverlay from './components/ProgressOverlay';
 import SettingsDialog from './components/SettingsDialog';
 import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp, fetchStatus, triggerStoreUpdate } from './api/client';
@@ -33,6 +34,7 @@ const App: React.FC = () => {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'installed' | 'update_available'>('all');
   const [pendingUninstallApp, setPendingUninstallApp] = useState<AppInfo | null>(null);
+  const [detailApp, setDetailApp] = useState<AppInfo | null>(null);
   const cancelRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -367,6 +369,7 @@ const App: React.FC = () => {
              onInstall={handleInstall}
              onUpdate={handleUpdate}
              onUninstall={handleUninstall}
+             onDetail={setDetailApp}
              filterType={activeFilter}
            />
         </main>
@@ -403,6 +406,14 @@ const App: React.FC = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AppDetailDialog
+        app={detailApp}
+        open={!!detailApp}
+        onOpenChange={(open) => !open && setDetailApp(null)}
+        onInstall={handleInstall}
+        onUpdate={handleUpdate}
+      />
 
       <Toaster />
     </div>

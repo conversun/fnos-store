@@ -38,6 +38,8 @@ type appsJSONEntry struct {
 	AppName     string   `json:"appname"`
 	DisplayName string   `json:"display_name"`
 	Description string   `json:"description"`
+	HomepageURL string   `json:"homepage_url"`
+	UpdatedAt   string   `json:"updated_at"`
 	Version     string   `json:"version"`
 	FpkVersion  string   `json:"fpk_version"`
 	ReleaseTag  string   `json:"release_tag"`
@@ -163,6 +165,8 @@ func (s *FNOSAppsSource) decodeApps(raw []byte) ([]RemoteApp, error) {
 			DisplayName: item.DisplayName,
 			Version:     item.Version,
 			Description: item.Description,
+			HomepageURL: item.HomepageURL,
+			UpdatedAt:   item.UpdatedAt,
 			ReleaseTag:  item.ReleaseTag,
 			FilePrefix:  item.FilePrefix,
 			FpkVersion:  item.FpkVersion,

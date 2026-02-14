@@ -36,6 +36,7 @@ func (s *Server) handleListApps(w http.ResponseWriter, r *http.Request) {
 		respApps = append(respApps, appResponse{
 			AppName:          app.AppName,
 			DisplayName:      app.DisplayName,
+			Description:      app.Description,
 			Installed:        app.Installed,
 			InstalledVersion: app.InstalledVersion,
 			LatestVersion:    app.LatestVersion,
@@ -45,7 +46,10 @@ func (s *Server) handleListApps(w http.ResponseWriter, r *http.Request) {
 			ReleaseURL:       releaseURL,
 			ReleaseNotes:     "",
 			Status:           status,
+			ServicePort:      app.ServicePort,
+			Homepage:         app.HomepageURL,
 			IconURL:          app.IconURL,
+			UpdatedAt:        app.UpdatedAt,
 		})
 	}
 
