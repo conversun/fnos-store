@@ -1,7 +1,7 @@
 import React from 'react';
 import type { AppInfo, AppOperation } from '../api/client';
 import AppCard from './AppCard';
-import { PackageSearch, CheckCircle2, RefreshCw } from 'lucide-react';
+import { PackageSearch, CheckCircle2, RefreshCw, Search } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface AppListProps {
@@ -14,6 +14,7 @@ interface AppListProps {
   onCancelOp?: (app: AppInfo) => void;
   filterType?: string;
   appOperations?: Map<string, AppOperation>;
+  searchQuery?: string;
 }
 
 const getEmptyMessage = (filterType?: string) => {
@@ -27,7 +28,7 @@ const getEmptyMessage = (filterType?: string) => {
   }
 };
 
-const AppList: React.FC<AppListProps> = ({ apps, loading, onInstall, onUpdate, onUninstall, onDetail, onCancelOp, filterType, appOperations }) => {
+const AppList: React.FC<AppListProps> = ({ apps, loading, onInstall, onUpdate, onUninstall, onDetail, onCancelOp, filterType, appOperations, searchQuery }) => {
   if (loading) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -45,6 +46,14 @@ const AppList: React.FC<AppListProps> = ({ apps, loading, onInstall, onUpdate, o
   }
 
   if (apps.length === 0) {
+    if (searchQuery?.trim()) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+          <Search className="h-12 w-12 mb-4 opacity-40" />
+          <p className="text-sm">未找到匹配「{searchQuery.trim()}」的应用</p>
+        </div>
+      );
+    }
     const empty = getEmptyMessage(filterType);
     const Icon = empty.icon;
     return (

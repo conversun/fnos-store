@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu, ChevronsLeft, ChevronsRight, Search, X } from 'lucide-react';
 import { Button } from './components/ui/button';
+import { Input } from './components/ui/input';
 import { Badge } from './components/ui/badge';
 import AppList from './components/AppList';
 import AppDetailDialog from './components/AppDetailDialog';
@@ -36,6 +37,7 @@ const App: React.FC = () => {
 
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'installed' | 'update_available'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [pendingUninstallApp, setPendingUninstallApp] = useState<AppInfo | null>(null);
   const [detailApp, setDetailApp] = useState<AppInfo | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() =>
@@ -324,9 +326,17 @@ const App: React.FC = () => {
   }, []);
 
   const filteredApps = apps.filter(app => {
-    if (activeFilter === 'all') return true;
-    if (activeFilter === 'installed') return app.installed;
-    if (activeFilter === 'update_available') return app.has_update;
+    if (activeFilter === 'installed' && !app.installed) return false;
+    if (activeFilter === 'update_available' && !app.has_update) return false;
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const name = (app.display_name || '').toLowerCase();
+      const appname = (app.appname || '').toLowerCase();
+      const desc = (app.description || '').toLowerCase();
+      if (!name.includes(q) && !appname.includes(q) && !desc.includes(q)) return false;
+    }
+
     return true;
   });
 
@@ -469,93 +479,131 @@ const App: React.FC = () => {
        </aside>
 
       <div className="flex-1 flex flex-col min-h-screen">
-        <div className="md:hidden bg-card border-b border-border p-4 sticky top-0 z-20 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-                <Sheet>
-                    <SheetTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                            <Menu className="h-5 w-5" />
-                        </Button>
-                    </SheetTrigger>
-                    <SheetContent side="left" className="w-64 p-0">
-                         <div className="p-6 border-b border-border">
-                            <h1 className="text-xl font-semibold tracking-tight">fnOS Apps</h1>
-                            <p className="text-sm text-muted-foreground mt-1.5">
-                               上次检查: {lastCheck ? new Date(lastCheck).toLocaleString() : '从未'}
-                            </p>
-                         </div>
-                         <nav className="flex-1 p-4 space-y-1">
-                             <Button
-                               variant={activeFilter === 'all' ? 'secondary' : 'ghost'}
-                               className="w-full justify-start h-10 px-3 shadow-none"
-                               onClick={() => setActiveFilter('all')}
-                             >
-                                <LayoutGrid className="mr-3 h-4 w-4 shrink-0" />
-                                <span className="flex-1 text-left">全部</span>
-                                <span className="ml-auto text-xs text-muted-foreground tabular-nums">{counts.all}</span>
-                             </Button>
-                             <Button
-                               variant={activeFilter === 'installed' ? 'secondary' : 'ghost'}
-                               className="w-full justify-start h-10 px-3 shadow-none"
-                               onClick={() => setActiveFilter('installed')}
-                             >
-                                <CheckCircle2 className="mr-3 h-4 w-4 shrink-0" />
-                                <span className="flex-1 text-left">已安装</span>
-                                <span className="ml-auto text-xs text-muted-foreground tabular-nums">{counts.installed}</span>
-                             </Button>
-                             <Button
-                               variant={activeFilter === 'update_available' ? 'secondary' : 'ghost'}
-                               className="w-full justify-start h-10 px-3 shadow-none"
-                               onClick={() => setActiveFilter('update_available')}
-                             >
-                                <RefreshCw className="mr-3 h-4 w-4 shrink-0" />
-                                <span className="flex-1 text-left">有更新</span>
-                                {counts.update_available > 0 ? (
-                                  <Badge variant="destructive" className="ml-auto shrink-0">{counts.update_available}</Badge>
-                                ) : (
-                                  <span className="ml-auto text-xs text-muted-foreground tabular-nums">0</span>
-                                )}
-                             </Button>
-                          </nav>
-                          <div className="p-4 mt-auto border-t border-border space-y-1">
-                             <Button
-                               variant="ghost"
-                               className="w-full justify-start h-10 px-3 shadow-none text-muted-foreground hover:text-foreground"
-                               onClick={() => window.open('https://github.com/conversun/fnos-apps/issues', '_blank')}
-                             >
-                                <MessageCircle className="mr-3 h-4 w-4 shrink-0" />
-                                <span className="flex-1 text-left">问题反馈</span>
-                             </Button>
-                             <Button
-                               variant="ghost"
-                               className="w-full justify-start h-10 px-3 shadow-none text-muted-foreground hover:text-foreground"
-                               onClick={() => setSettingsVisible(true)}
-                             >
-                                <Settings className="mr-3 h-4 w-4 shrink-0" />
-                                <span className="flex-1 text-left">设置</span>
-                             </Button>
-                          </div>
-                    </SheetContent>
-                </Sheet>
-                <h1 className="text-xl font-bold">fnOS Apps</h1>
+        <div className="md:hidden bg-card border-b border-border p-4 sticky top-0 z-20 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <Sheet>
+                        <SheetTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                                <Menu className="h-5 w-5" />
+                            </Button>
+                        </SheetTrigger>
+                        <SheetContent side="left" className="w-64 p-0">
+                             <div className="p-6 border-b border-border">
+                                <h1 className="text-xl font-semibold tracking-tight">fnOS Apps</h1>
+                                <p className="text-sm text-muted-foreground mt-1.5">
+                                   上次检查: {lastCheck ? new Date(lastCheck).toLocaleString() : '从未'}
+                                </p>
+                             </div>
+                             <nav className="flex-1 p-4 space-y-1">
+                                 <Button
+                                   variant={activeFilter === 'all' ? 'secondary' : 'ghost'}
+                                   className="w-full justify-start h-10 px-3 shadow-none"
+                                   onClick={() => setActiveFilter('all')}
+                                 >
+                                    <LayoutGrid className="mr-3 h-4 w-4 shrink-0" />
+                                    <span className="flex-1 text-left">全部</span>
+                                    <span className="ml-auto text-xs text-muted-foreground tabular-nums">{counts.all}</span>
+                                 </Button>
+                                 <Button
+                                   variant={activeFilter === 'installed' ? 'secondary' : 'ghost'}
+                                   className="w-full justify-start h-10 px-3 shadow-none"
+                                   onClick={() => setActiveFilter('installed')}
+                                 >
+                                    <CheckCircle2 className="mr-3 h-4 w-4 shrink-0" />
+                                    <span className="flex-1 text-left">已安装</span>
+                                    <span className="ml-auto text-xs text-muted-foreground tabular-nums">{counts.installed}</span>
+                                 </Button>
+                                 <Button
+                                   variant={activeFilter === 'update_available' ? 'secondary' : 'ghost'}
+                                   className="w-full justify-start h-10 px-3 shadow-none"
+                                   onClick={() => setActiveFilter('update_available')}
+                                 >
+                                    <RefreshCw className="mr-3 h-4 w-4 shrink-0" />
+                                    <span className="flex-1 text-left">有更新</span>
+                                    {counts.update_available > 0 ? (
+                                      <Badge variant="destructive" className="ml-auto shrink-0">{counts.update_available}</Badge>
+                                    ) : (
+                                      <span className="ml-auto text-xs text-muted-foreground tabular-nums">0</span>
+                                    )}
+                                 </Button>
+                              </nav>
+                              <div className="p-4 mt-auto border-t border-border space-y-1">
+                                 <Button
+                                   variant="ghost"
+                                   className="w-full justify-start h-10 px-3 shadow-none text-muted-foreground hover:text-foreground"
+                                   onClick={() => window.open('https://github.com/conversun/fnos-apps/issues', '_blank')}
+                                 >
+                                    <MessageCircle className="mr-3 h-4 w-4 shrink-0" />
+                                    <span className="flex-1 text-left">问题反馈</span>
+                                 </Button>
+                                 <Button
+                                   variant="ghost"
+                                   className="w-full justify-start h-10 px-3 shadow-none text-muted-foreground hover:text-foreground"
+                                   onClick={() => setSettingsVisible(true)}
+                                 >
+                                    <Settings className="mr-3 h-4 w-4 shrink-0" />
+                                    <span className="flex-1 text-left">设置</span>
+                                 </Button>
+                              </div>
+                        </SheetContent>
+                    </Sheet>
+                    <h1 className="text-xl font-bold">fnOS Apps</h1>
+                </div>
+            </div>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                type="text"
+                placeholder="搜索应用..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-8 h-9"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </div>
         </div>
 
         <header className="hidden md:flex bg-card border-b border-border px-8 py-4 justify-between items-center sticky top-0 z-10">
-           <h2 className="text-lg font-medium">
+           <h2 className="text-lg font-medium shrink-0">
               {activeFilter === 'all' && '全部应用'}
               {activeFilter === 'installed' && '已安装应用'}
               {activeFilter === 'update_available' && '可用更新'}
            </h2>
-           <div className="flex items-center space-x-4">
+           <div className="flex items-center gap-3">
+               <div className="relative">
+                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                 <Input
+                   type="text"
+                   placeholder="搜索应用..."
+                   value={searchQuery}
+                   onChange={(e) => setSearchQuery(e.target.value)}
+                   className="w-56 pl-8 pr-8 h-9"
+                 />
+                 {searchQuery && (
+                   <button
+                     onClick={() => setSearchQuery('')}
+                     className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                   >
+                     <X className="h-4 w-4" />
+                   </button>
+                 )}
+               </div>
                <Button 
                  onClick={handleCheck} 
                  disabled={checking}
                >
                  {checking ? (
                    <>
-                     <RefreshCw className={`mr-2 h-4 w-4 ${checking ? 'animate-spin' : ''}`} />
-                     {checking ? '检查中...' : '立即检查'}
+                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                     检查中...
                    </>
                  ) : (
                    <>
@@ -578,6 +626,7 @@ const App: React.FC = () => {
              onCancelOp={handleCancelOp}
              filterType={activeFilter}
              appOperations={appOperations}
+             searchQuery={searchQuery}
            />
         </main>
       </div>
