@@ -10,8 +10,7 @@ import {
   RefreshCw, 
   Package,
   Circle,
-  ArrowRight,
-  Info
+  ArrowRight
 } from 'lucide-react';
 
 interface AppCardProps {
@@ -142,16 +141,6 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
               </div>
               
               <div className="flex items-center gap-1.5">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => onDetail?.(app)}
-                  className="rounded-full px-2.5 h-7 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  <Info className="mr-1 h-3.5 w-3.5" />
-                  详情
-                </Button>
-                
                 {operation.step === 'downloading' && operation.cancel && (
                   <Button
                     size="sm"
@@ -182,16 +171,6 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
             </div>
 
             <div className="flex items-center gap-1.5">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => onDetail?.(app)}
-                className="rounded-full px-2.5 h-7 text-xs text-muted-foreground hover:text-foreground"
-              >
-                <Info className="mr-1 h-3.5 w-3.5" />
-                详情
-              </Button>
-
               {!isInstalled ? (
                 <Button
                   size="sm"

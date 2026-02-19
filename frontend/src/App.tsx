@@ -558,7 +558,7 @@ const App: React.FC = () => {
                 placeholder="搜索应用..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-8 h-9"
+                className="w-full pl-8 pr-8 h-9 shadow-none"
               />
               {searchQuery && (
                 <button
@@ -585,7 +585,7 @@ const App: React.FC = () => {
                    placeholder="搜索应用..."
                    value={searchQuery}
                    onChange={(e) => setSearchQuery(e.target.value)}
-                   className="w-56 pl-8 pr-8 h-9"
+                    className="w-56 pl-8 pr-8 h-9 shadow-none"
                  />
                  {searchQuery && (
                    <button
