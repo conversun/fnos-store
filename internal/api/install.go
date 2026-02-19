@@ -35,7 +35,7 @@ func (s *Server) runInstallLikeOperation(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	s.pipeline.runStandard(r.Context(), stream, opName, app, s.refreshRegistryDebounced)
+	s.pipeline.runStandard(r.Context(), stream, opName, app, s.refreshRegistry)
 }
 
 func (s *Server) runSelfUpdate(w http.ResponseWriter, r *http.Request, app core.AppInfo) {

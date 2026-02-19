@@ -130,7 +130,7 @@ func (p *installPipeline) verifyInstalled(appname string) error {
 	return nil
 }
 
-func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, opName string, app core.AppInfo, refreshFn func(context.Context)) {
+func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, opName string, app core.AppInfo, refreshFn func(context.Context) error) {
 	fpkPath, err := p.downloadFpk(ctx, stream, app)
 	if err != nil {
 		_ = stream.sendError(err.Error())
@@ -168,7 +168,7 @@ func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, op
 		p.cacheStore.SetInstalledTag(app.AppName, app.ReleaseTag)
 	}
 
-	refreshFn(ctx)
+	_ = refreshFn(ctx)
 
 	newVersion := app.FpkVersion
 	if newVersion == "" {
