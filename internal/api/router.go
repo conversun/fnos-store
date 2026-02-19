@@ -33,7 +33,8 @@ type Server struct {
 	lastCheck   time.Time
 	statusByApp map[string]string
 
-	mu sync.RWMutex
+	mu               sync.RWMutex
+	refreshDebouncer *refreshDebouncer
 }
 
 type Config struct {
@@ -71,7 +72,8 @@ func NewServer(cfg Config) *Server {
 		platform:    cfg.Platform,
 		storeApp:    cfg.StoreApp,
 		staticFS:    cfg.StaticFS,
-		statusByApp: make(map[string]string),
+		statusByApp:      make(map[string]string),
+		refreshDebouncer: &refreshDebouncer{},
 	}
 	s.routes()
 	_ = s.refreshRegistry(context.Background())

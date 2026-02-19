@@ -27,25 +27,25 @@ func (s *Server) runInstallLikeOperation(w http.ResponseWriter, r *http.Request,
 		writeAPIError(w, http.StatusConflict, "another operation is already running")
 		return
 	}
-	defer s.queue.Finish()
+	defer s.queue.FinishApp(appname)
 
-	stream, err := newSSEStream(w, r)
+	stream, err := newSSEStream(w, r, appname)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	s.pipeline.runStandard(r.Context(), stream, opName, app, s.refreshRegistry)
+	s.pipeline.runStandard(r.Context(), stream, opName, app, s.refreshRegistryDebounced)
 }
 
 func (s *Server) runSelfUpdate(w http.ResponseWriter, r *http.Request, app core.AppInfo) {
-	if !s.queue.TryStart("update", s.storeApp) {
+	if !s.queue.TryStartExclusive("update", s.storeApp) {
 		writeAPIError(w, http.StatusConflict, "another operation is already running")
 		return
 	}
-	defer s.queue.Finish()
+	defer s.queue.FinishExclusive(s.storeApp)
 
-	stream, err := newSSEStream(w, r)
+	stream, err := newSSEStream(w, r, s.storeApp)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return

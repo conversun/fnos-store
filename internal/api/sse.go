@@ -12,15 +12,20 @@ type progressPayload struct {
 	Progress   int    `json:"progress,omitempty"`
 	Message    string `json:"message,omitempty"`
 	NewVersion string `json:"new_version,omitempty"`
+	AppName    string `json:"appname,omitempty"`
+	Speed      int64  `json:"speed,omitempty"`
+	Downloaded int64  `json:"downloaded,omitempty"`
+	Total      int64  `json:"total,omitempty"`
 }
 
 type sseStream struct {
 	w       http.ResponseWriter
 	r       *http.Request
 	flusher http.Flusher
+	appname string
 }
 
-func newSSEStream(w http.ResponseWriter, r *http.Request) (*sseStream, error) {
+func newSSEStream(w http.ResponseWriter, r *http.Request, appname string) (*sseStream, error) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -31,13 +36,15 @@ func newSSEStream(w http.ResponseWriter, r *http.Request) (*sseStream, error) {
 		return nil, errors.New("streaming not supported")
 	}
 
-	return &sseStream{w: w, r: r, flusher: flusher}, nil
+	return &sseStream{w: w, r: r, flusher: flusher, appname: appname}, nil
 }
 
 func (s *sseStream) sendProgress(payload progressPayload) error {
 	if err := s.r.Context().Err(); err != nil {
 		return err
 	}
+
+	payload.AppName = s.appname
 
 	raw, err := json.Marshal(payload)
 	if err != nil {

@@ -3,11 +3,18 @@ package api
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"fnos-store/internal/core"
 	"fnos-store/internal/platform"
 )
+
+type refreshDebouncer struct {
+	mu      sync.Mutex
+	timer   *time.Timer
+	pending bool
+}
 
 func (s *Server) refreshRegistry(ctx context.Context) error {
 	if s.source == nil || s.registry == nil {
@@ -100,4 +107,24 @@ func (s *Server) getLastCheck() time.Time {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.lastCheck
+}
+
+func (s *Server) refreshRegistryDebounced(ctx context.Context) {
+	s.refreshDebouncer.mu.Lock()
+	defer s.refreshDebouncer.mu.Unlock()
+
+	if s.refreshDebouncer.pending {
+		if s.refreshDebouncer.timer != nil {
+			s.refreshDebouncer.timer.Stop()
+		}
+	}
+
+	s.refreshDebouncer.pending = true
+	s.refreshDebouncer.timer = time.AfterFunc(2*time.Second, func() {
+		s.refreshDebouncer.mu.Lock()
+		s.refreshDebouncer.pending = false
+		s.refreshDebouncer.mu.Unlock()
+
+		_ = s.refreshRegistry(context.Background())
+	})
 }

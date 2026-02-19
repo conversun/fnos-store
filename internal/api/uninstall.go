@@ -13,11 +13,23 @@ func (s *Server) handleUninstall(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusConflict, "another operation is already running")
 		return
 	}
-	defer s.queue.Finish()
+	defer s.queue.FinishApp(appname)
 
-	_ = s.queue.WithCLI(func() error { return s.ac.Stop(appname) })
+	stream, err := newSSEStream(w, r, appname)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	_ = stream.sendProgress(progressPayload{Step: "stopping", Message: "正在停止..."})
+	if err := s.queue.WithCLI(func() error { return s.ac.Stop(appname) }); err != nil {
+		_ = stream.sendError(err.Error())
+		return
+	}
+
+	_ = stream.sendProgress(progressPayload{Step: "uninstalling", Message: "正在卸载..."})
 	if err := s.queue.WithCLI(func() error { return s.ac.Uninstall(appname) }); err != nil {
-		writeAPIError(w, http.StatusBadGateway, err.Error())
+		_ = stream.sendError(err.Error())
 		return
 	}
 
@@ -26,9 +38,9 @@ func (s *Server) handleUninstall(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.refreshRegistry(r.Context()); err != nil {
-		writeAPIError(w, http.StatusBadGateway, err.Error())
+		_ = stream.sendError(err.Error())
 		return
 	}
 
-	writeJSON(w, http.StatusOK, uninstallResponse{Status: "ok", AppName: appname})
+	_ = stream.sendProgress(progressPayload{Step: "done", Message: "卸载完成"})
 }

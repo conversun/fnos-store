@@ -18,6 +18,7 @@ type DownloadRequest struct {
 	MirrorURL string
 	DirectURL string
 	FileName  string
+	AppName   string
 }
 
 type Downloader struct {
@@ -77,7 +78,8 @@ func (d *Downloader) Download(ctx context.Context, req DownloadRequest, progress
 		return "", err
 	}
 
-	finalPath := filepath.Join(d.downloadDir, req.FileName)
+	prefixedName := req.AppName + "-" + req.FileName
+	finalPath := filepath.Join(d.downloadDir, prefixedName)
 	tmpPath := finalPath + ".tmp"
 
 	urls := make([]string, 0, 2)

@@ -7,16 +7,20 @@ import {
 } from "@/components/ui/dialog"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
+import { formatBytes, formatSpeed } from "@/lib/utils"
 
 interface ProgressOverlayProps {
   visible: boolean;
   message: string;
   progress: number;
+  speed?: number;
+  downloaded?: number;
+  total?: number;
   onCancel?: () => void;
   onDismiss?: () => void;
 }
 
-const ProgressOverlay: React.FC<ProgressOverlayProps> = ({ visible, message, progress, onCancel, onDismiss }) => {
+const ProgressOverlay: React.FC<ProgressOverlayProps> = ({ visible, message, progress, speed, downloaded, total, onCancel, onDismiss }) => {
   return (
     <Dialog open={visible} onOpenChange={() => {}}>
       <DialogContent 
@@ -34,6 +38,14 @@ const ProgressOverlay: React.FC<ProgressOverlayProps> = ({ visible, message, pro
             <span>{Math.round(progress)}%</span>
           </div>
           <Progress value={progress} className="w-full" />
+          {speed != null && speed > 0 && (
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{formatSpeed(speed)}</span>
+              {downloaded != null && total != null && total > 0 && (
+                <span>{formatBytes(downloaded)} / {formatBytes(total)}</span>
+              )}
+            </div>
+          )}
         </div>
 
         {(onCancel || onDismiss) && (

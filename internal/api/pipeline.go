@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"time"
 
 	"fnos-store/internal/core"
 	"fnos-store/internal/platform"
@@ -49,19 +50,43 @@ func (p *installPipeline) downloadFpk(ctx context.Context, stream *sseStream, ap
 
 	_ = stream.sendProgress(progressPayload{Step: "downloading", Progress: 0, Message: "正在下载..."})
 
+	startTime := time.Now()
+	var lastSend time.Time
+
 	fpkPath, err := p.downloads.Download(ctx, core.DownloadRequest{
 		MirrorURL: app.MirrorURL,
 		DirectURL: app.DownloadURL,
 		FileName:  fileName,
+		AppName:   app.AppName,
 	}, func(downloaded, total int64) {
 		if total <= 0 {
 			return
 		}
+
+		now := time.Now()
+		isFinal := downloaded >= total
+		if !isFinal && now.Sub(lastSend) < 200*time.Millisecond {
+			return
+		}
+		lastSend = now
+
 		pct := int(float64(downloaded) * 100 / float64(total))
 		if pct > 100 {
 			pct = 100
 		}
-		_ = stream.sendProgress(progressPayload{Step: "downloading", Progress: pct})
+
+		var speed int64
+		if elapsed := now.Sub(startTime).Seconds(); elapsed > 0 {
+			speed = int64(float64(downloaded) / elapsed)
+		}
+
+		_ = stream.sendProgress(progressPayload{
+			Step:       "downloading",
+			Progress:   pct,
+			Speed:      speed,
+			Downloaded: downloaded,
+			Total:      total,
+		})
 	})
 
 	return fpkPath, err
@@ -105,7 +130,7 @@ func (p *installPipeline) verifyInstalled(appname string) error {
 	return nil
 }
 
-func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, opName string, app core.AppInfo, refreshFn func(context.Context) error) {
+func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, opName string, app core.AppInfo, refreshFn func(context.Context)) {
 	fpkPath, err := p.downloadFpk(ctx, stream, app)
 	if err != nil {
 		_ = stream.sendError(err.Error())
@@ -143,10 +168,7 @@ func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, op
 		p.cacheStore.SetInstalledTag(app.AppName, app.ReleaseTag)
 	}
 
-	if err := refreshFn(ctx); err != nil && !errors.Is(err, context.Canceled) {
-		_ = stream.sendError(err.Error())
-		return
-	}
+	refreshFn(ctx)
 
 	newVersion := app.FpkVersion
 	if newVersion == "" {

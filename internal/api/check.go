@@ -28,14 +28,22 @@ func (s *Server) handleCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
-	qs := s.queue.Status()
-	writeJSON(w, http.StatusOK, statusResponse{
+	activeOps := s.queue.ActiveOps()
+
+	resp := statusResponse{
 		Status:    "ok",
-		Busy:      qs.Busy,
-		Operation: qs.Operation,
-		AppName:   qs.AppName,
-		StartedAt: formatTimestamp(qs.StartedAt),
+		Busy:      s.queue.IsBusy(),
 		LastCheck: formatTimestamp(s.getLastCheck()),
 		Platform:  s.platform,
-	})
+		ActiveOps: activeOps,
+	}
+
+	// Backward compat: fill single-operation fields from first active op
+	if len(activeOps) > 0 {
+		resp.Operation = activeOps[0].Operation
+		resp.AppName = activeOps[0].AppName
+		resp.StartedAt = formatTimestamp(activeOps[0].StartedAt)
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 }

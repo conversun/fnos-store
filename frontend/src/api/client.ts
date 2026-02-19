@@ -36,6 +36,19 @@ export interface UpdateProgress {
   new_version?: string;
   app?: string;
   error?: string;
+  speed?: number;
+  downloaded?: number;
+  total?: number;
+}
+
+export interface AppOperation {
+  step: string;
+  progress: number;
+  message: string;
+  cancel?: () => void;
+  speed?: number;
+  downloaded?: number;
+  total?: number;
 }
 
 export const fetchApps = async (): Promise<AppsResponse> => {

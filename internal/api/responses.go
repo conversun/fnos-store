@@ -31,18 +31,14 @@ type checkResponse struct {
 }
 
 type statusResponse struct {
-	Status    string `json:"status"`
-	Busy      bool   `json:"busy"`
-	Operation string `json:"operation"`
-	AppName   string `json:"appname"`
-	StartedAt string `json:"started_at"`
-	LastCheck string `json:"last_check"`
-	Platform  string `json:"platform"`
-}
-
-type uninstallResponse struct {
-	Status  string `json:"status"`
-	AppName string `json:"appname"`
+	Status    string        `json:"status"`
+	Busy      bool          `json:"busy"`
+	Operation string        `json:"operation"`
+	AppName   string        `json:"appname"`
+	StartedAt string        `json:"started_at"`
+	LastCheck string        `json:"last_check"`
+	Platform  string        `json:"platform"`
+	ActiveOps []QueueStatus `json:"active_operations,omitempty"`
 }
 
 type storeUpdateResponse struct {

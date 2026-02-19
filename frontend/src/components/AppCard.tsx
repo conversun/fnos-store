@@ -1,8 +1,10 @@
 import React from 'react';
-import type { AppInfo } from '../api/client';
+import type { AppInfo, AppOperation } from '../api/client';
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { cn, formatBytes, formatSpeed } from "@/lib/utils";
 import { 
   Download, 
   RefreshCw, 
@@ -14,13 +16,15 @@ import {
 
 interface AppCardProps {
   app: AppInfo;
+  operation?: AppOperation;
   onInstall: (app: AppInfo) => void;
   onUpdate: (app: AppInfo) => void;
   onUninstall?: (app: AppInfo) => void;
   onDetail?: (app: AppInfo) => void;
+  onCancelOp?: (app: AppInfo) => void;
 }
 
-const AppCard: React.FC<AppCardProps> = ({ app, onInstall, onUpdate, onDetail }) => {
+const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, onDetail, onCancelOp }) => {
   const isInstalled = app.installed;
   const canUpdate = isInstalled && app.has_update;
 
@@ -46,8 +50,23 @@ const AppCard: React.FC<AppCardProps> = ({ app, onInstall, onUpdate, onDetail })
     }
   };
 
+  const getStepText = (step: string): string => {
+    switch (step) {
+      case 'downloading': return '正在下载...';
+      case 'installing': return '正在安装...';
+      case 'verifying': return '正在验证...';
+      case 'starting': return '正在启动...';
+      case 'stopping': return '正在停止...';
+      case 'uninstalling': return '正在卸载...';
+      default: return '处理中...';
+    }
+  };
+
   return (
-    <Card className="relative overflow-hidden border border-border/30 bg-card shadow-[0_1px_3px_0_rgb(0_0_0/0.04)] rounded-xl">
+    <Card className={cn(
+      "relative overflow-hidden border border-border/30 bg-card shadow-[0_1px_3px_0_rgb(0_0_0/0.04)] rounded-xl",
+      operation && "border-primary/50"
+    )}>
       <div className="p-4 flex flex-col h-full gap-3">
 
         <div className="flex items-start gap-3 cursor-pointer" onClick={() => onDetail?.(app)}>
@@ -103,54 +122,99 @@ const AppCard: React.FC<AppCardProps> = ({ app, onInstall, onUpdate, onDetail })
 
         <div className="flex-1" />
 
-        <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/20">
-
-          <div className="flex items-center min-h-[1.25rem]">
-             {isInstalled ? (
-               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                 <Circle className={`h-2 w-2 ${getStatusColor(app.status)}`} />
-                 <span>{getStatusText(app.status)}</span>
-               </div>
-             ) : (
-               <span className="text-xs text-muted-foreground/50">
-                 未安装
-               </span>
-             )}
+        {operation ? (
+          <div className="pt-2 border-t border-border/20 space-y-2">
+            <Progress value={operation.progress} className="w-full h-1.5" />
+            
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
+                <span className="shrink-0">{getStepText(operation.step)}</span>
+                {operation.step === 'downloading' && operation.speed != null && operation.speed > 0 ? (
+                  <>
+                    <span className="shrink-0">{formatSpeed(operation.speed)}</span>
+                    {operation.downloaded != null && operation.total != null && operation.total > 0 && (
+                      <span className="truncate">{formatBytes(operation.downloaded)} / {formatBytes(operation.total)}</span>
+                    )}
+                  </>
+                ) : (
+                  <span>{Math.round(operation.progress)}%</span>
+                )}
+              </div>
+              
+              <div className="flex items-center gap-1.5">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onDetail?.(app)}
+                  className="rounded-full px-2.5 h-7 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <Info className="mr-1 h-3.5 w-3.5" />
+                  详情
+                </Button>
+                
+                {operation.step === 'downloading' && operation.cancel && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => onCancelOp?.(app)}
+                    className="rounded-full px-2.5 h-7 text-xs text-destructive hover:text-destructive"
+                  >
+                    取消
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
+        ) : (
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/20">
 
-          <div className="flex items-center gap-1.5">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => onDetail?.(app)}
-              className="rounded-full px-2.5 h-7 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <Info className="mr-1 h-3.5 w-3.5" />
-              详情
-            </Button>
+            <div className="flex items-center min-h-[1.25rem]">
+               {isInstalled ? (
+                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                   <Circle className={`h-2 w-2 ${getStatusColor(app.status)}`} />
+                   <span>{getStatusText(app.status)}</span>
+                 </div>
+               ) : (
+                 <span className="text-xs text-muted-foreground/50">
+                   未安装
+                 </span>
+               )}
+            </div>
 
-            {!isInstalled ? (
+            <div className="flex items-center gap-1.5">
               <Button
                 size="sm"
-                onClick={() => onInstall(app)}
-                className="rounded-full px-3.5 h-7 text-xs font-medium"
+                variant="ghost"
+                onClick={() => onDetail?.(app)}
+                className="rounded-full px-2.5 h-7 text-xs text-muted-foreground hover:text-foreground"
               >
-                <Download className="mr-1 h-3.5 w-3.5" />
-                安装
+                <Info className="mr-1 h-3.5 w-3.5" />
+                详情
               </Button>
-            ) : canUpdate ? (
-              <Button
-                size="sm"
-                onClick={() => onUpdate(app)}
-                variant="outline"
-                className="rounded-full px-3.5 h-7 text-xs font-medium border-primary text-primary hover:bg-primary/10"
-              >
-                <RefreshCw className="mr-1 h-3.5 w-3.5" />
-                更新
-              </Button>
-            ) : null}
+
+              {!isInstalled ? (
+                <Button
+                  size="sm"
+                  onClick={() => onInstall(app)}
+                  className="rounded-full px-3.5 h-7 text-xs font-medium"
+                >
+                  <Download className="mr-1 h-3.5 w-3.5" />
+                  安装
+                </Button>
+              ) : canUpdate ? (
+                <Button
+                  size="sm"
+                  onClick={() => onUpdate(app)}
+                  variant="outline"
+                  className="rounded-full px-3.5 h-7 text-xs font-medium border-primary text-primary hover:bg-primary/10"
+                >
+                  <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                  更新
+                </Button>
+              ) : null}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </Card>
   );

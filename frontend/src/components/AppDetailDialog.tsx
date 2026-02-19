@@ -1,5 +1,5 @@
 import React from 'react';
-import type { AppInfo } from '../api/client';
+import type { AppInfo, AppOperation } from '../api/client';
 import {
   Dialog,
   DialogContent,
@@ -29,6 +29,7 @@ interface AppDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   onInstall: (app: AppInfo) => void;
   onUpdate: (app: AppInfo) => void;
+  operation?: AppOperation;
 }
 
 const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChange, onInstall, onUpdate }) => {
