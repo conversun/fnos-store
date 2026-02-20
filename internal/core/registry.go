@@ -32,6 +32,7 @@ type AppInfo struct {
 	FpkVersion        string
 	DownloadURL       string
 	MirrorURL         string
+	DownloadCount     int
 	Status            AppStatus
 	HasRevisionUpdate bool
 }
@@ -74,6 +75,7 @@ func (r *Registry) Merge(local []Manifest, remote []source.RemoteApp, installedT
 			FpkVersion:    item.FpkVersion,
 			DownloadURL:   item.FpkURL,
 			MirrorURL:     item.MirrorURL,
+			DownloadCount: item.DownloadCount,
 			Status:        AppStatusNotInstalled,
 		}
 
@@ -102,6 +104,9 @@ func (r *Registry) Merge(local []Manifest, remote []source.RemoteApp, installedT
 	}
 
 	sort.Slice(result, func(i, j int) bool {
+		if result[i].UpdatedAt != result[j].UpdatedAt {
+			return result[i].UpdatedAt > result[j].UpdatedAt
+		}
 		return result[i].DisplayName < result[j].DisplayName
 	})
 
