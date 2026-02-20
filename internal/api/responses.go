@@ -17,6 +17,7 @@ type appResponse struct {
 	Homepage         string `json:"homepage,omitempty"`
 	IconURL          string `json:"icon_url,omitempty"`
 	UpdatedAt        string `json:"updated_at,omitempty"`
+	DownloadCount    int    `json:"download_count"`
 }
 
 type appsListResponse struct {

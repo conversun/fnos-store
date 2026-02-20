@@ -35,18 +35,19 @@ type appsJSONPayload struct {
 }
 
 type appsJSONEntry struct {
-	AppName     string   `json:"appname"`
-	DisplayName string   `json:"display_name"`
-	Description string   `json:"description"`
-	HomepageURL string   `json:"homepage_url"`
-	UpdatedAt   string   `json:"updated_at"`
-	Version     string   `json:"version"`
-	FpkVersion  string   `json:"fpk_version"`
-	ReleaseTag  string   `json:"release_tag"`
-	FilePrefix  string   `json:"file_prefix"`
-	ServicePort int      `json:"service_port"`
-	IconURL     string   `json:"icon_url"`
-	Platforms   []string `json:"platforms"`
+	AppName       string   `json:"appname"`
+	DisplayName   string   `json:"display_name"`
+	Description   string   `json:"description"`
+	HomepageURL   string   `json:"homepage_url"`
+	UpdatedAt     string   `json:"updated_at"`
+	Version       string   `json:"version"`
+	FpkVersion    string   `json:"fpk_version"`
+	ReleaseTag    string   `json:"release_tag"`
+	FilePrefix    string   `json:"file_prefix"`
+	ServicePort   int      `json:"service_port"`
+	IconURL       string   `json:"icon_url"`
+	DownloadCount int      `json:"download_count"`
+	Platforms     []string `json:"platforms"`
 }
 
 func NewFNOSAppsSource(cachePath string, cfgMgr *config.Manager) *FNOSAppsSource {
@@ -161,20 +162,21 @@ func (s *FNOSAppsSource) decodeApps(raw []byte) ([]RemoteApp, error) {
 		)
 
 		app := RemoteApp{
-			AppName:     item.AppName,
-			DisplayName: item.DisplayName,
-			Version:     item.Version,
-			Description: item.Description,
-			HomepageURL: item.HomepageURL,
-			UpdatedAt:   item.UpdatedAt,
-			ReleaseTag:  item.ReleaseTag,
-			FilePrefix:  item.FilePrefix,
-			FpkVersion:  item.FpkVersion,
-			ServicePort: item.ServicePort,
-			Platforms:   item.Platforms,
-			FpkURL:      directURL,
-			IconURL:     item.IconURL,
-			Source:      s.Name(),
+			AppName:       item.AppName,
+			DisplayName:   item.DisplayName,
+			Version:       item.Version,
+			Description:   item.Description,
+			HomepageURL:   item.HomepageURL,
+			UpdatedAt:     item.UpdatedAt,
+			ReleaseTag:    item.ReleaseTag,
+			FilePrefix:    item.FilePrefix,
+			FpkVersion:    item.FpkVersion,
+			ServicePort:   item.ServicePort,
+			Platforms:     item.Platforms,
+			FpkURL:        directURL,
+			IconURL:       item.IconURL,
+			DownloadCount: item.DownloadCount,
+			Source:        s.Name(),
 		}
 
 		if prefix != "" {

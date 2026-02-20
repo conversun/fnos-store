@@ -50,6 +50,7 @@ func (s *Server) handleListApps(w http.ResponseWriter, r *http.Request) {
 			Homepage:         app.HomepageURL,
 			IconURL:          app.IconURL,
 			UpdatedAt:        app.UpdatedAt,
+			DownloadCount:    app.DownloadCount,
 		})
 	}
 
