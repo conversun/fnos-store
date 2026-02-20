@@ -162,6 +162,11 @@ func (d *Downloader) downloadFromURL(ctx context.Context, url, dstPath string, p
 	if err := f.Sync(); err != nil {
 		return err
 	}
+
+	const minFpkSize int64 = 10 * 1024
+	if downloaded < minFpkSize {
+		return fmt.Errorf("downloaded file too small (%d bytes) — likely corrupted", downloaded)
+	}
 	return nil
 }
 
