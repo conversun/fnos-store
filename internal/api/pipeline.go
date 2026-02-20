@@ -130,6 +130,42 @@ func (p *installPipeline) verifyInstalled(appname string) error {
 	return nil
 }
 
+func runWithVirtualProgress(ctx context.Context, stream *sseStream, step, message string, fn func() error) error {
+	done := make(chan error, 1)
+	go func() {
+		done <- fn()
+	}()
+
+	progress := 0
+	_ = stream.sendProgress(progressPayload{Step: step, Progress: 0, Message: message})
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case err := <-done:
+			if err == nil {
+				_ = stream.sendProgress(progressPayload{Step: step, Progress: 100, Message: message})
+			}
+			return err
+		case <-ticker.C:
+			remaining := 95 - progress
+			if remaining <= 0 {
+				continue
+			}
+			inc := remaining / 8
+			if inc < 1 {
+				inc = 1
+			}
+			progress += inc
+			_ = stream.sendProgress(progressPayload{Step: step, Progress: progress, Message: message})
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
 func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, opName string, app core.AppInfo, refreshFn func(context.Context) error) {
 	fpkPath, err := p.downloadFpk(ctx, stream, app)
 	if err != nil {
@@ -138,28 +174,29 @@ func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, op
 	}
 	defer os.Remove(fpkPath)
 
-	_ = stream.sendProgress(progressPayload{Step: "installing", Message: "正在安装..."})
-
 	volume, err := p.resolveVolume()
 	if err != nil {
 		_ = stream.sendError(err.Error())
 		return
 	}
 
-	if err := p.installFpk(fpkPath, volume); err != nil {
+	if err := runWithVirtualProgress(ctx, stream, "installing", "正在安装...", func() error {
+		return p.installFpk(fpkPath, volume)
+	}); err != nil {
 		_ = stream.sendError(err.Error())
 		return
 	}
 
-	_ = stream.sendProgress(progressPayload{Step: "verifying", Message: "正在验证安装..."})
-
-	if err := p.verifyInstalled(app.AppName); err != nil {
+	if err := runWithVirtualProgress(ctx, stream, "verifying", "正在验证安装...", func() error {
+		return p.verifyInstalled(app.AppName)
+	}); err != nil {
 		_ = stream.sendError(err.Error())
 		return
 	}
 
-	_ = stream.sendProgress(progressPayload{Step: "starting", Message: "正在启动..."})
-	if err := p.startApp(app.AppName); err != nil {
+	if err := runWithVirtualProgress(ctx, stream, "starting", "正在启动...", func() error {
+		return p.startApp(app.AppName)
+	}); err != nil {
 		_ = stream.sendError(err.Error())
 		return
 	}
