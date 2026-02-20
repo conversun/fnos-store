@@ -52,6 +52,7 @@ func (s *Server) handleListApps(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt:        app.UpdatedAt,
 			DownloadCount:    app.DownloadCount,
 			AppType:          app.AppType,
+			Category:         app.Category,
 		})
 	}
 

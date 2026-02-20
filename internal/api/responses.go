@@ -19,6 +19,7 @@ type appResponse struct {
 	UpdatedAt        string `json:"updated_at,omitempty"`
 	DownloadCount    int    `json:"download_count"`
 	AppType          string `json:"app_type,omitempty"`
+	Category         string `json:"category,omitempty"`
 }
 
 type appsListResponse struct {
