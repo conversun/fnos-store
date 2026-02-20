@@ -34,6 +34,7 @@ type AppInfo struct {
 	MirrorURL         string
 	DownloadCount     int
 	AppType           string
+	Category          string
 	Status            AppStatus
 	HasRevisionUpdate bool
 }
@@ -78,6 +79,7 @@ func (r *Registry) Merge(local []Manifest, remote []source.RemoteApp, installedT
 			MirrorURL:     item.MirrorURL,
 			DownloadCount: item.DownloadCount,
 			AppType:       item.AppType,
+			Category:      item.Category,
 			Status:        AppStatusNotInstalled,
 		}
 

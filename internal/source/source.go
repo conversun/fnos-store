@@ -20,6 +20,7 @@ type RemoteApp struct {
 	IconURL       string
 	DownloadCount int
 	AppType       string
+	Category      string
 	Source        string
 }
 

@@ -48,6 +48,7 @@ type appsJSONEntry struct {
 	IconURL       string   `json:"icon_url"`
 	DownloadCount int      `json:"download_count"`
 	AppType       string   `json:"app_type"`
+	Category      string   `json:"category"`
 	Platforms     []string `json:"platforms"`
 }
 
@@ -178,6 +179,7 @@ func (s *FNOSAppsSource) decodeApps(raw []byte) ([]RemoteApp, error) {
 			IconURL:       item.IconURL,
 			DownloadCount: item.DownloadCount,
 			AppType:       item.AppType,
+			Category:      item.Category,
 			Source:        s.Name(),
 		}
 
