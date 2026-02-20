@@ -17,6 +17,7 @@ export interface AppInfo {
   updated_at?: string;
   download_count?: number;
   app_type?: string;
+  category?: string;
 }
 
 export interface AppsResponse {

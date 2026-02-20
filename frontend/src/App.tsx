@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu, ChevronsLeft, ChevronsRight, Search, X } from 'lucide-react';
+import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu, ChevronsLeft, ChevronsRight, Search, X, Film, ArrowDownToLine, BookOpen, Wrench, Globe } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { Badge } from './components/ui/badge';
@@ -25,6 +25,16 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
+const CATEGORIES = [
+  { key: 'media', label: '媒体服务', icon: Film },
+  { key: 'download', label: '下载传输', icon: ArrowDownToLine },
+  { key: 'content', label: '内容管理', icon: BookOpen },
+  { key: 'system', label: '系统工具', icon: Wrench },
+  { key: 'browser', label: '浏览器', icon: Globe },
+] as const;
+
+type CategoryKey = typeof CATEGORIES[number]['key'];
+
 const App: React.FC = () => {
   const [apps, setApps] = useState<AppInfo[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -38,6 +48,7 @@ const App: React.FC = () => {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'installed' | 'update_available'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState<CategoryKey | null>(null);
   const [pendingUninstallApp, setPendingUninstallApp] = useState<AppInfo | null>(null);
   const [detailApp, setDetailApp] = useState<AppInfo | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() =>
@@ -328,6 +339,7 @@ const App: React.FC = () => {
   const filteredApps = apps.filter(app => {
     if (activeFilter === 'installed' && !app.installed) return false;
     if (activeFilter === 'update_available' && !app.has_update) return false;
+    if (activeCategory && app.category !== activeCategory) return false;
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -345,6 +357,11 @@ const App: React.FC = () => {
       installed: apps.filter(a => a.installed).length,
       update_available: apps.filter(a => a.has_update).length
   };
+
+  const categoryCounts = CATEGORIES.reduce((acc, cat) => {
+    acc[cat.key] = apps.filter(a => a.category === cat.key).length;
+    return acc;
+  }, {} as Record<string, number>);
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row">
@@ -373,7 +390,8 @@ const App: React.FC = () => {
            )}
          </div>
 
-         <nav className={cn("flex-1 space-y-1", sidebarCollapsed ? "p-2" : "p-4")}>
+         <div className="flex-1 overflow-y-auto">
+          <nav className={cn("space-y-1", sidebarCollapsed ? "p-2" : "p-4")}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -439,7 +457,41 @@ const App: React.FC = () => {
                 <TooltipContent side="right">有更新 ({counts.update_available})</TooltipContent>
               )}
             </Tooltip>
-         </nav>
+          </nav>
+
+          <div className={cn("border-t border-border", sidebarCollapsed ? "p-2 pt-3" : "px-4 pb-4 pt-3")}>
+            {!sidebarCollapsed && (
+              <p className="text-xs font-medium text-muted-foreground mb-2 px-3">分类</p>
+            )}
+            <div className="space-y-1">
+              {CATEGORIES.map(cat => {
+                const Icon = cat.icon;
+                const isActive = activeCategory === cat.key;
+                const count = categoryCounts[cat.key];
+                return (
+                  <Tooltip key={cat.key}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={isActive ? 'secondary' : 'ghost'}
+                        className={cn("w-full h-10 shadow-none", sidebarCollapsed ? "justify-center px-0" : "justify-start px-3")}
+                        onClick={() => setActiveCategory(isActive ? null : cat.key)}
+                      >
+                        <Icon className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
+                        {!sidebarCollapsed && (
+                          <>
+                            <span className="flex-1 text-left whitespace-nowrap">{cat.label}</span>
+                            <span className="ml-auto text-xs text-muted-foreground tabular-nums">{count}</span>
+                          </>
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    {sidebarCollapsed && <TooltipContent side="right">{cat.label} ({count})</TooltipContent>}
+                  </Tooltip>
+                );
+              })}
+            </div>
+          </div>
+         </div>
 
          <div className={cn("mt-auto border-t border-border space-y-1", sidebarCollapsed ? "p-2" : "p-4")}>
             <Tooltip>
@@ -528,6 +580,28 @@ const App: React.FC = () => {
                                     )}
                                  </Button>
                               </nav>
+                              <div className="px-4 pt-3 border-t border-border">
+                                <p className="text-xs font-medium text-muted-foreground mb-2 px-3">分类</p>
+                                <div className="space-y-1">
+                                  {CATEGORIES.map(cat => {
+                                    const Icon = cat.icon;
+                                    const isActive = activeCategory === cat.key;
+                                    const count = categoryCounts[cat.key];
+                                    return (
+                                      <Button
+                                        key={cat.key}
+                                        variant={isActive ? 'secondary' : 'ghost'}
+                                        className="w-full justify-start h-10 px-3 shadow-none"
+                                        onClick={() => setActiveCategory(isActive ? null : cat.key)}
+                                      >
+                                        <Icon className="mr-3 h-4 w-4 shrink-0" />
+                                        <span className="flex-1 text-left">{cat.label}</span>
+                                        <span className="ml-auto text-xs text-muted-foreground tabular-nums">{count}</span>
+                                      </Button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
                               <div className="p-4 mt-auto border-t border-border space-y-1">
                                  <Button
                                    variant="ghost"
@@ -576,6 +650,9 @@ const App: React.FC = () => {
               {activeFilter === 'all' && '全部应用'}
               {activeFilter === 'installed' && '已安装应用'}
               {activeFilter === 'update_available' && '可用更新'}
+              {activeCategory && (
+                <span className="text-muted-foreground font-normal">{' · '}{CATEGORIES.find(c => c.key === activeCategory)?.label}</span>
+              )}
            </h2>
            <div className="flex items-center gap-3">
                <div className="relative">
