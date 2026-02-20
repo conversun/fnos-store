@@ -19,6 +19,7 @@ type RemoteApp struct {
 	MirrorURL     string
 	IconURL       string
 	DownloadCount int
+	AppType       string
 	Source        string
 }
 

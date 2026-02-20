@@ -16,6 +16,7 @@ export interface AppInfo {
   icon_url?: string;
   updated_at?: string;
   download_count?: number;
+  app_type?: string;
 }
 
 export interface AppsResponse {

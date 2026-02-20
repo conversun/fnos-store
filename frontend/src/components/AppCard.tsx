@@ -10,7 +10,8 @@ import {
   RefreshCw, 
   Package,
   Circle,
-  ArrowRight
+  ArrowRight,
+  Container
 } from 'lucide-react';
 
 interface AppCardProps {
@@ -85,9 +86,14 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
 
           <div className="flex-1 min-w-0 flex flex-col gap-0.5">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="font-semibold text-sm leading-tight text-foreground truncate" title={app.display_name}>
-                {app.display_name}
-              </h3>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h3 className="font-semibold text-sm leading-tight text-foreground truncate" title={app.display_name}>
+                  {app.display_name}
+                </h3>
+                {app.app_type === 'docker' && (
+                  <Container className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                )}
+              </div>
               {canUpdate && (
                 <Badge variant="secondary" className="bg-primary/10 text-primary border-0 font-medium px-1.5 h-5 text-[11px] shrink-0 rounded-full">
                   有更新
