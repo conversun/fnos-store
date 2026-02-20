@@ -1,5 +1,5 @@
 appname         = fnos-apps-store
-version         = 1.2.1
+version         = 1.2.2
 display_name    = fnOS Apps
 platform        = x86
 maintainer      = conversun
