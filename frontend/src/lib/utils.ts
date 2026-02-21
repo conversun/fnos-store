@@ -17,6 +17,18 @@ export function formatSpeed(bytesPerSec: number): string {
   return `${formatBytes(bytesPerSec)}/s`;
 }
 
+export function formatProgress(downloaded: number, total: number): string {
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const thresholds = [1, 1024, 1048576, 1073741824];
+  let idx = 0;
+  for (let i = thresholds.length - 1; i >= 0; i--) {
+    if (total >= thresholds[i]) { idx = i; break; }
+  }
+  const d = thresholds[idx];
+  const fmt = (v: number) => d === 1 ? String(v) : (v / d).toFixed(1);
+  return `${fmt(downloaded)}/${fmt(total)} ${units[idx]}`;
+}
+
 export function formatCount(n: number): string {
   if (n < 1000) return String(n);
   if (n < 10000) return `${(n / 1000).toFixed(1)}k`;

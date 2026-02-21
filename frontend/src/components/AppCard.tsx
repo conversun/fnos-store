@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { cn, formatBytes, formatSpeed, formatCount } from "@/lib/utils";
+import { cn, formatSpeed, formatProgress, formatCount } from "@/lib/utils";
 import { 
   Download, 
   RefreshCw, 
@@ -147,7 +147,7 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
                   <>
                     <span className="shrink-0">{formatSpeed(operation.speed)}</span>
                     {operation.downloaded != null && operation.total != null && operation.total > 0 && (
-                      <span className="truncate">{formatBytes(operation.downloaded)} / {formatBytes(operation.total)}</span>
+                      <span className="truncate">{formatProgress(operation.downloaded, operation.total)}</span>
                     )}
                   </>
                 ) : (

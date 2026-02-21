@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/dialog"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
-import { formatBytes, formatSpeed } from "@/lib/utils"
+import { formatSpeed, formatProgress } from "@/lib/utils"
 
 interface ProgressOverlayProps {
   visible: boolean;
@@ -42,7 +42,7 @@ const ProgressOverlay: React.FC<ProgressOverlayProps> = ({ visible, message, pro
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>{formatSpeed(speed)}</span>
               {downloaded != null && total != null && total > 0 && (
-                <span>{formatBytes(downloaded)} / {formatBytes(total)}</span>
+                <span>{formatProgress(downloaded, total)}</span>
               )}
             </div>
           )}

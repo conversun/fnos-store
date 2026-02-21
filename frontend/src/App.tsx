@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu, ChevronsLeft, ChevronsRight, Search, X, Film, ArrowDownToLine, BookOpen, Wrench, Globe } from 'lucide-react';
+import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu, ChevronsLeft, ChevronsRight, Search, X, Film, ArrowDownToLine, BookOpen, Wrench, Globe, LayoutList } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { Badge } from './components/ui/badge';
@@ -464,6 +464,21 @@ const App: React.FC = () => {
               <p className="text-xs font-medium text-muted-foreground mb-2 px-3">分类</p>
             )}
             <div className="space-y-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={activeCategory === null ? 'secondary' : 'ghost'}
+                    className={cn("w-full h-10 shadow-none", sidebarCollapsed ? "justify-center px-0" : "justify-start px-3")}
+                    onClick={() => setActiveCategory(null)}
+                  >
+                    <LayoutList className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
+                    {!sidebarCollapsed && (
+                      <span className="flex-1 text-left whitespace-nowrap">全部</span>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                {sidebarCollapsed && <TooltipContent side="right">全部</TooltipContent>}
+              </Tooltip>
               {CATEGORIES.map(cat => {
                 const Icon = cat.icon;
                 const isActive = activeCategory === cat.key;
@@ -474,7 +489,7 @@ const App: React.FC = () => {
                       <Button
                         variant={isActive ? 'secondary' : 'ghost'}
                         className={cn("w-full h-10 shadow-none", sidebarCollapsed ? "justify-center px-0" : "justify-start px-3")}
-                        onClick={() => setActiveCategory(isActive ? null : cat.key)}
+                        onClick={() => setActiveCategory(cat.key)}
                       >
                         <Icon className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
                         {!sidebarCollapsed && (
@@ -583,6 +598,14 @@ const App: React.FC = () => {
                               <div className="px-4 pt-3 border-t border-border">
                                 <p className="text-xs font-medium text-muted-foreground mb-2 px-3">分类</p>
                                 <div className="space-y-1">
+                                  <Button
+                                    variant={activeCategory === null ? 'secondary' : 'ghost'}
+                                    className="w-full justify-start h-10 px-3 shadow-none"
+                                    onClick={() => setActiveCategory(null)}
+                                  >
+                                    <LayoutList className="mr-3 h-4 w-4 shrink-0" />
+                                    <span className="flex-1 text-left">全部</span>
+                                  </Button>
                                   {CATEGORIES.map(cat => {
                                     const Icon = cat.icon;
                                     const isActive = activeCategory === cat.key;
@@ -592,7 +615,7 @@ const App: React.FC = () => {
                                         key={cat.key}
                                         variant={isActive ? 'secondary' : 'ghost'}
                                         className="w-full justify-start h-10 px-3 shadow-none"
-                                        onClick={() => setActiveCategory(isActive ? null : cat.key)}
+                                        onClick={() => setActiveCategory(cat.key)}
                                       >
                                         <Icon className="mr-3 h-4 w-4 shrink-0" />
                                         <span className="flex-1 text-left">{cat.label}</span>
