@@ -137,11 +137,43 @@ export const uninstallApp = (appname: string, onEvent: SSECallback): SSEHandle =
   return streamSSE(`/api/apps/${appname}/uninstall`, onEvent);
 };
 
+export interface MirrorOption {
+  key: string;
+  label: string;
+  description: string;
+}
+
 export interface Settings {
   check_interval_hours: number;
   mirror: string;
-  mirror_options?: string[];
+  mirror_options?: MirrorOption[];
+  docker_mirror: string;
+  docker_mirror_options?: MirrorOption[];
+  custom_github_mirror?: string;
+  custom_docker_mirror?: string;
 }
+
+export interface MirrorCheckResult {
+  key: string;
+  label: string;
+  latency_ms: number;
+  status: 'ok' | 'timeout' | 'error';
+}
+
+export interface MirrorCheckResponse {
+  github_mirrors: MirrorCheckResult[];
+  docker_mirrors: MirrorCheckResult[];
+}
+
+export const checkMirrors = async (type?: 'github' | 'docker'): Promise<MirrorCheckResponse> => {
+  const params = type ? `?type=${type}` : '';
+  const response = await fetch(`/api/mirrors/check${params}`, { method: 'POST' });
+  if (!response.ok) {
+    throw new Error(`Failed to check mirrors: ${response.statusText}`);
+  }
+  return response.json();
+};
+
 
 export interface StatusResponse {
   version?: string;
@@ -162,7 +194,7 @@ export const fetchSettings = async (): Promise<Settings> => {
   return response.json();
 };
 
-export const updateSettings = async (settings: Settings): Promise<void> => {
+export const updateSettings = async (settings: { check_interval_hours: number; mirror: string; docker_mirror: string; custom_github_mirror?: string; custom_docker_mirror?: string }): Promise<void> => {
   const response = await fetch('/api/settings', {
     method: 'PUT',
     headers: {

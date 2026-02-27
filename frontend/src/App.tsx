@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu, ChevronsLeft, ChevronsRight, Search, X, Film, ArrowDownToLine, BookOpen, Wrench, Globe, LayoutList } from 'lucide-react';
+import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu, ChevronsLeft, ChevronsRight, Search, X, Film, ArrowDownToLine, BookOpen, Wrench, Globe, LayoutList, ArrowUpDown } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { Badge } from './components/ui/badge';
@@ -14,6 +14,13 @@ import { Toaster } from "@/components/ui/sonner"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,6 +42,8 @@ const CATEGORIES = [
 
 type CategoryKey = typeof CATEGORIES[number]['key'];
 
+type SortKey = 'default' | 'downloads' | 'name' | 'updated';
+
 const App: React.FC = () => {
   const [apps, setApps] = useState<AppInfo[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -51,6 +60,7 @@ const App: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<CategoryKey | null>(null);
   const [pendingUninstallApp, setPendingUninstallApp] = useState<AppInfo | null>(null);
   const [detailApp, setDetailApp] = useState<AppInfo | null>(null);
+  const [sortBy, setSortBy] = useState<SortKey>('default');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() =>
     localStorage.getItem('sidebar-collapsed') === 'true'
   );
@@ -350,6 +360,17 @@ const App: React.FC = () => {
     }
 
     return true;
+  }).sort((a, b) => {
+    switch (sortBy) {
+      case 'downloads':
+        return (b.download_count ?? 0) - (a.download_count ?? 0);
+      case 'name':
+        return (a.display_name || '').localeCompare(b.display_name || '');
+      case 'updated':
+        return (b.updated_at || '').localeCompare(a.updated_at || '');
+      default:
+        return 0;
+    }
   });
 
   const counts = {
@@ -666,6 +687,18 @@ const App: React.FC = () => {
                 </button>
               )}
             </div>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
+              <SelectTrigger className="w-full h-9 shadow-none">
+                <ArrowUpDown className="h-3.5 w-3.5 mr-1.5" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">默认</SelectItem>
+                <SelectItem value="downloads">下载量</SelectItem>
+                <SelectItem value="name">名称</SelectItem>
+                <SelectItem value="updated">最近更新</SelectItem>
+              </SelectContent>
+            </Select>
         </div>
 
         <header className="hidden md:flex bg-card border-b border-border px-8 py-4 justify-between items-center sticky top-0 z-10">
@@ -696,6 +729,18 @@ const App: React.FC = () => {
                    </button>
                  )}
                </div>
+               <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
+                 <SelectTrigger className="w-32 h-9 shadow-none">
+                   <ArrowUpDown className="h-3.5 w-3.5 mr-1.5" />
+                   <SelectValue />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectItem value="default">默认</SelectItem>
+                   <SelectItem value="downloads">下载量</SelectItem>
+                   <SelectItem value="name">名称</SelectItem>
+                   <SelectItem value="updated">最近更新</SelectItem>
+                 </SelectContent>
+               </Select>
                <Button 
                  onClick={handleCheck} 
                  disabled={checking}

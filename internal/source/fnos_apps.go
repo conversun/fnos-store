@@ -72,9 +72,10 @@ func (s *FNOSAppsSource) Name() string {
 
 func (s *FNOSAppsSource) mirrorPrefix() string {
 	if s.configMgr == nil {
-		return config.MirrorPrefix(config.DefaultMirror)
+		return config.GitHubMirrorPrefix(config.DefaultMirror, config.Config{})
 	}
-	return config.MirrorPrefix(s.configMgr.Get().Mirror)
+	cfg := s.configMgr.Get()
+	return config.GitHubMirrorPrefix(cfg.Mirror, cfg)
 }
 
 func (s *FNOSAppsSource) FetchApps(ctx context.Context) ([]RemoteApp, error) {
@@ -93,16 +94,20 @@ func (s *FNOSAppsSource) FetchApps(ctx context.Context) ([]RemoteApp, error) {
 }
 
 func (s *FNOSAppsSource) fetchRemote(ctx context.Context) ([]RemoteApp, []byte, error) {
-	prefix := s.mirrorPrefix()
-
-	urls := make([]string, 0, 2)
-	if prefix != "" {
-		urls = append(urls, prefix+s.appsURL)
+	var cfg config.Config
+	if s.configMgr != nil {
+		cfg = s.configMgr.Get()
+	} else {
+		cfg = config.Config{Mirror: config.DefaultMirror}
 	}
-	urls = append(urls, s.appsURL)
+	prefixes := config.GitHubFallbackPrefixes(cfg.Mirror, cfg)
 
 	var lastErr error
-	for _, u := range urls {
+	for _, prefix := range prefixes {
+		u := s.appsURL
+		if prefix != "" {
+			u = prefix + s.appsURL
+		}
 		apps, raw, err := s.fetchURL(ctx, u)
 		if err == nil {
 			return apps, raw, nil
@@ -184,7 +189,6 @@ func (s *FNOSAppsSource) decodeApps(raw []byte) ([]RemoteApp, error) {
 		}
 
 		if prefix != "" {
-			app.MirrorURL = prefix + directURL
 			if item.IconURL != "" {
 				app.IconURL = prefix + item.IconURL
 			}

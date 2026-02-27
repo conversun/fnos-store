@@ -16,7 +16,6 @@ type RemoteApp struct {
 	ServicePort   int
 	Platforms     []string
 	FpkURL        string
-	MirrorURL     string
 	IconURL       string
 	DownloadCount int
 	AppType       string

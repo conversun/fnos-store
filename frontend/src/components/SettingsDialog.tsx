@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { fetchSettings, updateSettings, fetchStoreUpdate } from '../api/client';
+import React, { useState, useEffect, useRef } from 'react';
+import { fetchSettings, updateSettings, fetchStoreUpdate, checkMirrors, type MirrorOption, type MirrorCheckResult } from '../api/client';
 import type { StoreUpdateInfo } from '../api/client';
 import {
   Dialog,
@@ -16,9 +16,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, RefreshCw } from 'lucide-react'
+import { Switch } from "@/components/ui/switch"
+import { Loader2, RefreshCw, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface SettingsDialogProps {
@@ -27,11 +29,18 @@ interface SettingsDialogProps {
   onStoreUpdate?: () => void;
 }
 
-const mirrorLabels: Record<string, string> = {
-  direct: '直连 GitHub',
-  ghfast: 'GHFast 镜像',
-  'gh-proxy': 'GH-Proxy 镜像',
-};
+function latencyColor(result: MirrorCheckResult): string {
+  if (result.status !== 'ok') return 'text-muted-foreground';
+  if (result.latency_ms <= 300) return 'text-green-600';
+  if (result.latency_ms <= 800) return 'text-yellow-600';
+  return 'text-red-500';
+}
+
+function latencyText(result: MirrorCheckResult): string {
+  if (result.status === 'timeout') return '超时';
+  if (result.status === 'error') return '失败';
+  return `${result.latency_ms}ms`;
+}
 
 const SettingsDialog: React.FC<SettingsDialogProps> = ({
   visible,
@@ -39,15 +48,34 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
   onStoreUpdate,
 }) => {
   const [interval, setInterval] = useState<number>(24);
-  const [mirror, setMirror] = useState<string>('ghfast');
-  const [mirrorOptions, setMirrorOptions] = useState<string[]>([]);
+  const [mirror, setMirror] = useState<string>('gh-proxy');
+  const [mirrorOptions, setMirrorOptions] = useState<MirrorOption[]>([]);
+  const [dockerMirror, setDockerMirror] = useState<string>('daocloud');
+  const [dockerMirrorOptions, setDockerMirrorOptions] = useState<MirrorOption[]>([]);
+  const [customGithubMirror, setCustomGithubMirror] = useState<string>('');
+  const [customDockerMirror, setCustomDockerMirror] = useState<string>('');
   const [storeInfo, setStoreInfo] = useState<StoreUpdateInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Speed test state — independent for GitHub and Docker
+  const [ghChecking, setGhChecking] = useState(false);
+  const [dkChecking, setDkChecking] = useState(false);
+  const [ghLatency, setGhLatency] = useState<Map<string, MirrorCheckResult>>(new Map());
+  const [dkLatency, setDkLatency] = useState<Map<string, MirrorCheckResult>>(new Map());
+
+  // Remember the last non-direct selection so toggling back ON restores it
+  const prevMirrorRef = useRef<string>('gh-proxy');
+  const prevDockerMirrorRef = useRef<string>('daocloud');
+
+  const githubEnabled = mirror !== 'direct';
+  const dockerEnabled = dockerMirror !== 'direct';
+
   useEffect(() => {
     if (visible) {
       loadData();
+      setGhLatency(new Map());
+      setDkLatency(new Map());
     }
   }, [visible]);
 
@@ -59,8 +87,16 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
         fetchStoreUpdate()
       ]);
       setInterval(settings.check_interval_hours);
-      setMirror(settings.mirror || 'ghfast');
+      const m = settings.mirror || 'gh-proxy';
+      const dm = settings.docker_mirror || 'daocloud';
+      setMirror(m);
       setMirrorOptions(settings.mirror_options || []);
+      setDockerMirror(dm);
+      setDockerMirrorOptions(settings.docker_mirror_options || []);
+      setCustomGithubMirror(settings.custom_github_mirror || '');
+      setCustomDockerMirror(settings.custom_docker_mirror || '');
+      if (m !== 'direct') prevMirrorRef.current = m;
+      if (dm !== 'direct') prevDockerMirrorRef.current = dm;
       setStoreInfo(store);
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -70,10 +106,66 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
     }
   };
 
+  const handleGhSpeedTest = async () => {
+    setGhChecking(true);
+    setGhLatency(new Map());
+    try {
+      const result = await checkMirrors('github');
+      const gh = new Map<string, MirrorCheckResult>();
+      for (const r of result.github_mirrors) gh.set(r.key, r);
+      setGhLatency(gh);
+    } catch (error) {
+      console.error('GitHub speed test failed:', error);
+      toast.error('GitHub 测速失败');
+    } finally {
+      setGhChecking(false);
+    }
+  };
+
+  const handleDkSpeedTest = async () => {
+    setDkChecking(true);
+    setDkLatency(new Map());
+    try {
+      const result = await checkMirrors('docker');
+      const dk = new Map<string, MirrorCheckResult>();
+      for (const r of result.docker_mirrors) dk.set(r.key, r);
+      setDkLatency(dk);
+    } catch (error) {
+      console.error('Docker speed test failed:', error);
+      toast.error('Docker 测速失败');
+    } finally {
+      setDkChecking(false);
+    }
+  };
+
+  const handleGithubToggle = (checked: boolean) => {
+    if (checked) {
+      setMirror(prevMirrorRef.current);
+    } else {
+      prevMirrorRef.current = mirror;
+      setMirror('direct');
+    }
+  };
+
+  const handleDockerToggle = (checked: boolean) => {
+    if (checked) {
+      setDockerMirror(prevDockerMirrorRef.current);
+    } else {
+      prevDockerMirrorRef.current = dockerMirror;
+      setDockerMirror('direct');
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
-      await updateSettings({ check_interval_hours: interval, mirror });
+      await updateSettings({
+        check_interval_hours: interval,
+        mirror,
+        docker_mirror: dockerMirror,
+        custom_github_mirror: customGithubMirror || undefined,
+        custom_docker_mirror: customDockerMirror || undefined,
+      });
       onClose();
     } catch (error) {
       console.error('Failed to save settings:', error);
@@ -82,6 +174,9 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
       setSaving(false);
     }
   };
+
+  const githubSelectOptions = mirrorOptions.filter((opt) => opt.key !== 'direct');
+  const dockerSelectOptions = dockerMirrorOptions.filter((opt) => opt.key !== 'direct');
 
   return (
     <Dialog open={visible} onOpenChange={(open) => !open && onClose()}>
@@ -116,27 +211,131 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                下载镜像
-              </label>
-              <Select
-                value={mirror}
-                onValueChange={(value) => setMirror(value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="选择镜像" />
-                </SelectTrigger>
-                <SelectContent>
-                  {mirrorOptions.map((opt) => (
-                    <SelectItem key={opt} value={opt}>
-                      {mirrorLabels[opt] || opt}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium leading-none">
+                    GitHub 下载加速
+                  </label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={handleGhSpeedTest}
+                    disabled={ghChecking}
+                  >
+                    {ghChecking ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    ) : (
+                      <Zap className="h-3 w-3 mr-1" />
+                    )}
+                    测速
+                  </Button>
+                </div>
+                <Switch checked={githubEnabled} onCheckedChange={handleGithubToggle} />
+              </div>
+              {githubEnabled && (
+                <>
+                  <Select
+                    value={mirror}
+                    onValueChange={(value) => setMirror(value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择镜像" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {githubSelectOptions.map((opt) => {
+                        const result = ghLatency.get(opt.key);
+                        return (
+                          <SelectItem key={opt.key} value={opt.key}>
+                            <span className="flex items-center justify-between w-full gap-2">
+                              <span>{opt.label}</span>
+                              {result && (
+                                <span className={`text-[11px] tabular-nums ${latencyColor(result)}`}>
+                                  {latencyText(result)}
+                                </span>
+                              )}
+                            </span>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  {mirror === 'custom' && (
+                    <Input
+                      placeholder="https://your-proxy.example.com/"
+                      value={customGithubMirror}
+                      onChange={(e) => setCustomGithubMirror(e.target.value)}
+                    />
+                  )}
+                </>
+              )}
               <p className="text-xs text-muted-foreground">
-                国内用户建议使用镜像加速下载
+                {githubEnabled ? '使用镜像加速从 GitHub 下载应用安装包' : '直接从 GitHub 下载，不使用加速'}
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium leading-none">
+                    Docker 镜像加速
+                  </label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={handleDkSpeedTest}
+                    disabled={dkChecking}
+                  >
+                    {dkChecking ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    ) : (
+                      <Zap className="h-3 w-3 mr-1" />
+                    )}
+                    测速
+                  </Button>
+                </div>
+                <Switch checked={dockerEnabled} onCheckedChange={handleDockerToggle} />
+              </div>
+              {dockerEnabled && (
+                <>
+                  <Select
+                    value={dockerMirror}
+                    onValueChange={(value) => setDockerMirror(value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择镜像" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {dockerSelectOptions.map((opt) => {
+                        const result = dkLatency.get(opt.key);
+                        return (
+                          <SelectItem key={opt.key} value={opt.key}>
+                            <span className="flex items-center justify-between w-full gap-2">
+                              <span>{opt.label}</span>
+                              {result && (
+                                <span className={`text-[11px] tabular-nums ${latencyColor(result)}`}>
+                                  {latencyText(result)}
+                                </span>
+                              )}
+                            </span>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  {dockerMirror === 'custom' && (
+                    <Input
+                      placeholder="your-mirror.example.com/"
+                      value={customDockerMirror}
+                      onChange={(e) => setCustomDockerMirror(e.target.value)}
+                    />
+                  )}
+                </>
+              )}
+              <p className="text-xs text-muted-foreground">
+                {dockerEnabled ? 'Docker 类应用拉取镜像时使用的加速源' : '直接从 Docker Hub 拉取，不使用加速'}
               </p>
             </div>
 

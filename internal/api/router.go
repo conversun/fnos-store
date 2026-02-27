@@ -63,15 +63,16 @@ func NewServer(cfg Config) *Server {
 			downloads:  cfg.Downloader,
 			ac:         cfg.AppCenter,
 			queue:      queue,
+			configMgr:  cfg.ConfigMgr,
 			cacheStore: cfg.CacheStore,
 		},
-		configMgr:   cfg.ConfigMgr,
-		cacheStore:  cfg.CacheStore,
-		scheduler:   cfg.Scheduler,
-		appsDir:     cfg.AppsDir,
-		platform:    cfg.Platform,
-		storeApp:    cfg.StoreApp,
-		staticFS:    cfg.StaticFS,
+		configMgr:        cfg.ConfigMgr,
+		cacheStore:       cfg.CacheStore,
+		scheduler:        cfg.Scheduler,
+		appsDir:          cfg.AppsDir,
+		platform:         cfg.Platform,
+		storeApp:         cfg.StoreApp,
+		staticFS:         cfg.StaticFS,
 		statusByApp:      make(map[string]string),
 		refreshDebouncer: &refreshDebouncer{},
 	}
@@ -91,6 +92,7 @@ func (s *Server) routes() {
 	s.Mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
 	s.Mux.HandleFunc("GET /api/store-update", s.handleGetStoreUpdate)
 	s.Mux.HandleFunc("POST /api/store-update", s.handlePostStoreUpdate)
+	s.Mux.HandleFunc("POST /api/mirrors/check", s.handleCheckMirrors)
 	s.Mux.HandleFunc("/", s.handleSPA)
 }
 

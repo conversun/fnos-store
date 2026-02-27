@@ -9,6 +9,7 @@ import (
 	"path"
 	"time"
 
+	"fnos-store/internal/config"
 	"fnos-store/internal/core"
 	"fnos-store/internal/platform"
 )
@@ -17,6 +18,7 @@ type installPipeline struct {
 	downloads  *core.Downloader
 	ac         platform.AppCenter
 	queue      *OperationQueue
+	configMgr  *config.Manager
 	cacheStore cacheTagStore
 }
 
@@ -53,11 +55,34 @@ func (p *installPipeline) downloadFpk(ctx context.Context, stream *sseStream, ap
 	startTime := time.Now()
 	var lastSend time.Time
 
+	var cfg config.Config
+	if p.configMgr != nil {
+		cfg = p.configMgr.Get()
+	} else {
+		cfg = config.Config{Mirror: config.DefaultMirror, DockerMirror: config.DefaultDockerMirror}
+	}
+
+	dockerPrefix := config.DockerMirrorPrefix(cfg.DockerMirror, cfg)
+	if dockerPrefix != "" {
+		os.Setenv("DOCKER_MIRROR", dockerPrefix)
+	} else {
+		os.Unsetenv("DOCKER_MIRROR")
+	}
+
+	prefixes := config.GitHubFallbackPrefixes(cfg.Mirror, cfg)
+	downloadURLs := make([]string, 0, len(prefixes))
+	for _, prefix := range prefixes {
+		if prefix != "" {
+			downloadURLs = append(downloadURLs, prefix+app.DownloadURL)
+		} else {
+			downloadURLs = append(downloadURLs, app.DownloadURL)
+		}
+	}
+
 	fpkPath, err := p.downloads.Download(ctx, core.DownloadRequest{
-		MirrorURL: app.MirrorURL,
-		DirectURL: app.DownloadURL,
-		FileName:  fileName,
-		AppName:   app.AppName,
+		URLs:     downloadURLs,
+		FileName: fileName,
+		AppName:  app.AppName,
 	}, func(downloaded, total int64) {
 		if total <= 0 {
 			return

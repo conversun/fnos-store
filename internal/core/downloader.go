@@ -15,10 +15,9 @@ import (
 )
 
 type DownloadRequest struct {
-	MirrorURL string
-	DirectURL string
-	FileName  string
-	AppName   string
+	URLs     []string
+	FileName string
+	AppName  string
 }
 
 type Downloader struct {
@@ -82,13 +81,7 @@ func (d *Downloader) Download(ctx context.Context, req DownloadRequest, progress
 	finalPath := filepath.Join(d.downloadDir, prefixedName)
 	tmpPath := finalPath + ".tmp"
 
-	urls := make([]string, 0, 2)
-	if req.MirrorURL != "" {
-		urls = append(urls, req.MirrorURL)
-	}
-	if req.DirectURL != "" {
-		urls = append(urls, req.DirectURL)
-	}
+	urls := req.URLs
 
 	if len(urls) == 0 {
 		return "", errors.New("download urls are empty")
