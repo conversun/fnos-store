@@ -18,6 +18,7 @@ export interface AppInfo {
   download_count?: number;
   app_type?: string;
   category?: string;
+  post_install_note?: string;
 }
 
 export interface AppsResponse {

@@ -7,7 +7,7 @@ import AppList from './components/AppList';
 import AppDetailDialog from './components/AppDetailDialog';
 import ProgressOverlay from './components/ProgressOverlay';
 import SettingsDialog from './components/SettingsDialog';
-import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp, fetchStatus, triggerStoreUpdate } from './api/client';
+import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp, fetchStatus, fetchStoreUpdate, triggerStoreUpdate } from './api/client';
 import type { AppInfo, AppOperation, SSECallback } from './api/client';
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
@@ -55,6 +55,7 @@ const App: React.FC = () => {
   const [selfUpdateState, setSelfUpdateState] = useState<{message: string; progress: number; speed?: number; downloaded?: number; total?: number} | null>(null);
 
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [storeHasUpdate, setStoreHasUpdate] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'installed' | 'update_available'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<CategoryKey | null>(null);
@@ -75,6 +76,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     loadApps();
+    fetchStoreUpdate().then(info => setStoreHasUpdate(info.has_update)).catch(() => {});
   }, []);
 
   const setAppOp = useCallback((appname: string, op: AppOperation | null) => {
@@ -131,7 +133,9 @@ const App: React.FC = () => {
     }
   };
 
-  const createSSEHandler = useCallback((appname: string): SSECallback => (data) => {
+  const createSSEHandler = useCallback((app: AppInfo, operation: 'install' | 'update' | 'uninstall'): SSECallback => (data) => {
+    const appname = app.appname;
+
     if (data.step === 'self_update') {
       setSelfUpdateActive(true);
       setSelfUpdateState({ message: data.message || '商店正在更新，请稍候...', progress: 100 });
@@ -149,6 +153,23 @@ const App: React.FC = () => {
     if (data.step === 'done') {
       setAppOp(appname, null);
       loadApps();
+
+      if (operation === 'uninstall') {
+        toast.success(`${app.display_name} 已卸载`);
+      } else if (app.service_port) {
+        const label = operation === 'install' ? '安装成功' : '更新成功';
+        const note = operation === 'install' && app.post_install_note ? app.post_install_note : undefined;
+        toast.success(`${app.display_name} ${label}`, {
+          description: note,
+          duration: note ? 8000 : 4000,
+          action: {
+            label: '打开',
+            onClick: () => window.open(`${window.location.protocol}//${window.location.hostname}:${app.service_port}`, '_blank'),
+          },
+        });
+      } else {
+        toast.success(`${app.display_name} ${operation === 'install' ? '安装成功' : '更新成功'}`);
+      }
       return;
     }
 
@@ -177,7 +198,7 @@ const App: React.FC = () => {
 
   const handleInstall = useCallback(async (app: AppInfo) => {
     const appname = app.appname;
-    const handler = createSSEHandler(appname);
+    const handler = createSSEHandler(app, 'install');
 
     setAppOp(appname, {
       step: 'starting',
@@ -218,7 +239,7 @@ const App: React.FC = () => {
 
   const handleUpdate = useCallback(async (app: AppInfo) => {
     const appname = app.appname;
-    const handler = createSSEHandler(appname);
+    const handler = createSSEHandler(app, 'update');
 
     setAppOp(appname, {
       step: 'starting',
@@ -267,7 +288,7 @@ const App: React.FC = () => {
     setPendingUninstallApp(null);
 
     const appname = app.appname;
-    const handler = createSSEHandler(appname);
+    const handler = createSSEHandler(app, 'uninstall');
 
     setAppOp(appname, {
       step: 'uninstalling',
@@ -555,12 +576,17 @@ const App: React.FC = () => {
                     sidebarCollapsed ? "justify-center px-0" : "justify-start px-3"
                   )}
                   onClick={() => setSettingsVisible(true)}
-                >
-                  <Settings className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
+                 >
+                  <div className="relative shrink-0">
+                    <Settings className={cn("h-4 w-4", !sidebarCollapsed && "mr-3")} />
+                    {storeHasUpdate && (
+                      <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-destructive" />
+                    )}
+                  </div>
                   {!sidebarCollapsed && <span className="flex-1 text-left whitespace-nowrap">设置</span>}
                 </Button>
               </TooltipTrigger>
-              {sidebarCollapsed && <TooltipContent side="right">设置</TooltipContent>}
+              {sidebarCollapsed && <TooltipContent side="right">设置{storeHasUpdate ? ' (有更新)' : ''}</TooltipContent>}
             </Tooltip>
          </div>
         </TooltipProvider>
@@ -660,7 +686,12 @@ const App: React.FC = () => {
                                    className="w-full justify-start h-10 px-3 shadow-none text-muted-foreground hover:text-foreground"
                                    onClick={() => setSettingsVisible(true)}
                                  >
-                                    <Settings className="mr-3 h-4 w-4 shrink-0" />
+                                    <div className="relative shrink-0 mr-3">
+                                      <Settings className="h-4 w-4" />
+                                      {storeHasUpdate && (
+                                        <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-destructive" />
+                                      )}
+                                    </div>
                                     <span className="flex-1 text-left">设置</span>
                                  </Button>
                               </div>
