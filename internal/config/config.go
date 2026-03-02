@@ -95,6 +95,7 @@ type Config struct {
 	DockerMirror       string `json:"docker_mirror"`
 	CustomGitHubMirror string `json:"custom_github_mirror,omitempty"`
 	CustomDockerMirror string `json:"custom_docker_mirror,omitempty"`
+	InstallVolume      int    `json:"install_volume"`
 }
 
 // Manager handles loading and saving config to disk.

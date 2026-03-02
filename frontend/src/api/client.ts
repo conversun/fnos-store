@@ -143,6 +143,11 @@ export interface MirrorOption {
   description: string;
 }
 
+export interface VolumeOption {
+  index: number;
+  path: string;
+}
+
 export interface Settings {
   check_interval_hours: number;
   mirror: string;
@@ -151,6 +156,8 @@ export interface Settings {
   docker_mirror_options?: MirrorOption[];
   custom_github_mirror?: string;
   custom_docker_mirror?: string;
+  install_volume: number;
+  volume_options?: VolumeOption[];
 }
 
 export interface MirrorCheckResult {
@@ -194,7 +201,7 @@ export const fetchSettings = async (): Promise<Settings> => {
   return response.json();
 };
 
-export const updateSettings = async (settings: { check_interval_hours: number; mirror: string; docker_mirror: string; custom_github_mirror?: string; custom_docker_mirror?: string }): Promise<void> => {
+export const updateSettings = async (settings: { check_interval_hours: number; mirror: string; docker_mirror: string; custom_github_mirror?: string; custom_docker_mirror?: string; install_volume: number }): Promise<void> => {
   const response = await fetch('/api/settings', {
     method: 'PUT',
     headers: {

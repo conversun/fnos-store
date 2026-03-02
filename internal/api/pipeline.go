@@ -118,6 +118,11 @@ func (p *installPipeline) downloadFpk(ctx context.Context, stream *sseStream, ap
 }
 
 func (p *installPipeline) resolveVolume() (int, error) {
+	if p.configMgr != nil {
+		if v := p.configMgr.Get().InstallVolume; v > 0 {
+			return v, nil
+		}
+	}
 	var volume int
 	err := p.queue.WithCLI(func() error {
 		var e error

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { fetchSettings, updateSettings, fetchStoreUpdate, checkMirrors, type MirrorOption, type MirrorCheckResult } from '../api/client';
+import { fetchSettings, updateSettings, fetchStoreUpdate, checkMirrors, type MirrorOption, type MirrorCheckResult, type VolumeOption } from '../api/client';
 import type { StoreUpdateInfo } from '../api/client';
 import {
   Dialog,
@@ -54,6 +54,8 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
   const [dockerMirrorOptions, setDockerMirrorOptions] = useState<MirrorOption[]>([]);
   const [customGithubMirror, setCustomGithubMirror] = useState<string>('');
   const [customDockerMirror, setCustomDockerMirror] = useState<string>('');
+  const [installVolume, setInstallVolume] = useState<number>(0);
+  const [volumeOptions, setVolumeOptions] = useState<VolumeOption[]>([]);
   const [storeInfo, setStoreInfo] = useState<StoreUpdateInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -95,6 +97,8 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
       setDockerMirrorOptions(settings.docker_mirror_options || []);
       setCustomGithubMirror(settings.custom_github_mirror || '');
       setCustomDockerMirror(settings.custom_docker_mirror || '');
+      setInstallVolume(settings.install_volume || 0);
+      setVolumeOptions(settings.volume_options || []);
       if (m !== 'direct') prevMirrorRef.current = m;
       if (dm !== 'direct') prevDockerMirrorRef.current = dm;
       setStoreInfo(store);
@@ -165,6 +169,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
         docker_mirror: dockerMirror,
         custom_github_mirror: customGithubMirror || undefined,
         custom_docker_mirror: customDockerMirror || undefined,
+        install_volume: installVolume,
       });
       onClose();
     } catch (error) {
@@ -210,6 +215,33 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 </SelectContent>
               </Select>
             </div>
+
+            {volumeOptions.length > 0 && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  应用安装硬盘
+                </label>
+                <Select
+                  value={installVolume.toString()}
+                  onValueChange={(value) => setInstallVolume(Number(value))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择安装硬盘" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">系统默认</SelectItem>
+                    {volumeOptions.map((vol) => (
+                      <SelectItem key={vol.index} value={vol.index.toString()}>
+                        硬盘 {vol.index} ({vol.path})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  选择应用安装到哪个硬盘，默认使用系统指定的硬盘
+                </p>
+              </div>
+            )}
 
             <div className="space-y-3">
               <div className="flex items-center justify-between">

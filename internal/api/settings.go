@@ -14,6 +14,11 @@ type mirrorOptionResponse struct {
 	Description string `json:"description"`
 }
 
+type volumeOptionResponse struct {
+	Index int    `json:"index"`
+	Path  string `json:"path"`
+}
+
 type settingsResponse struct {
 	CheckIntervalHours  int                    `json:"check_interval_hours"`
 	Mirror              string                 `json:"mirror"`
@@ -22,6 +27,8 @@ type settingsResponse struct {
 	DockerMirrorOptions []mirrorOptionResponse `json:"docker_mirror_options"`
 	CustomGitHubMirror  string                 `json:"custom_github_mirror,omitempty"`
 	CustomDockerMirror  string                 `json:"custom_docker_mirror,omitempty"`
+	InstallVolume       int                    `json:"install_volume"`
+	VolumeOptions       []volumeOptionResponse `json:"volume_options"`
 }
 
 type settingsRequest struct {
@@ -30,6 +37,7 @@ type settingsRequest struct {
 	DockerMirror       string `json:"docker_mirror"`
 	CustomGitHubMirror string `json:"custom_github_mirror"`
 	CustomDockerMirror string `json:"custom_docker_mirror"`
+	InstallVolume      int    `json:"install_volume"`
 }
 
 func githubMirrorOptionsResponse() []mirrorOptionResponse {
@@ -57,6 +65,15 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	cfg := s.configMgr.Get()
+
+	var volOpts []volumeOptionResponse
+	if volumes, err := s.ac.ListVolumes(); err == nil {
+		volOpts = make([]volumeOptionResponse, len(volumes))
+		for i, v := range volumes {
+			volOpts[i] = volumeOptionResponse{Index: v.Index, Path: v.Path}
+		}
+	}
+
 	writeJSON(w, http.StatusOK, settingsResponse{
 		CheckIntervalHours:  cfg.CheckIntervalHours,
 		Mirror:              cfg.Mirror,
@@ -65,6 +82,8 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		DockerMirrorOptions: dockerMirrorOptionsResponse(),
 		CustomGitHubMirror:  cfg.CustomGitHubMirror,
 		CustomDockerMirror:  cfg.CustomDockerMirror,
+		InstallVolume:       cfg.InstallVolume,
+		VolumeOptions:       volOpts,
 	})
 }
 
@@ -97,6 +116,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		DockerMirror:       req.DockerMirror,
 		CustomGitHubMirror: req.CustomGitHubMirror,
 		CustomDockerMirror: req.CustomDockerMirror,
+		InstallVolume:      req.InstallVolume,
 	}
 
 	if err := s.configMgr.SaveConfig(cfg); err != nil {
@@ -108,6 +128,14 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		s.scheduler.SetInterval(time.Duration(req.CheckIntervalHours) * time.Hour)
 	}
 
+	var volOpts []volumeOptionResponse
+	if volumes, err := s.ac.ListVolumes(); err == nil {
+		volOpts = make([]volumeOptionResponse, len(volumes))
+		for i, v := range volumes {
+			volOpts[i] = volumeOptionResponse{Index: v.Index, Path: v.Path}
+		}
+	}
+
 	writeJSON(w, http.StatusOK, settingsResponse{
 		CheckIntervalHours:  req.CheckIntervalHours,
 		Mirror:              req.Mirror,
@@ -116,5 +144,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		DockerMirrorOptions: dockerMirrorOptionsResponse(),
 		CustomGitHubMirror:  req.CustomGitHubMirror,
 		CustomDockerMirror:  req.CustomDockerMirror,
+		InstallVolume:       req.InstallVolume,
+		VolumeOptions:       volOpts,
 	})
 }

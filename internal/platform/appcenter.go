@@ -8,6 +8,12 @@ type InstalledApp struct {
 	Status      string // "running" or "stopped"
 }
 
+// VolumeInfo represents an available installation volume.
+type VolumeInfo struct {
+	Index int
+	Path  string
+}
+
 // AppCenter abstracts appcenter-cli operations.
 // The real implementation calls appcenter-cli on Linux;
 // the mock implementation simulates it for development on macOS.
@@ -41,4 +47,7 @@ type AppCenter interface {
 
 	// DefaultVolume returns the default installation volume index.
 	DefaultVolume() (int, error)
+
+	// ListVolumes returns all available installation volumes.
+	ListVolumes() ([]VolumeInfo, error)
 }

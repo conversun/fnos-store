@@ -102,3 +102,10 @@ func (m *MockAppCenter) DefaultVolume() (int, error) {
 	}
 	return strconv.Atoi(out)
 }
+
+func (m *MockAppCenter) ListVolumes() ([]VolumeInfo, error) {
+	return []VolumeInfo{
+		{Index: 1, Path: "/vol1"},
+		{Index: 2, Path: "/vol2"},
+	}, nil
+}

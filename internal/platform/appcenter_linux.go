@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -110,4 +112,33 @@ func (a *LinuxAppCenter) DefaultVolume() (int, error) {
 		return 0, err
 	}
 	return strconv.Atoi(out)
+}
+
+func (a *LinuxAppCenter) ListVolumes() ([]VolumeInfo, error) {
+	matches, err := filepath.Glob("/vol*")
+	if err != nil {
+		return nil, err
+	}
+
+	var volumes []VolumeInfo
+	for _, m := range matches {
+		info, err := os.Stat(m)
+		if err != nil || !info.IsDir() {
+			continue
+		}
+		name := filepath.Base(m)
+		if !strings.HasPrefix(name, "vol") {
+			continue
+		}
+		idx, err := strconv.Atoi(name[3:])
+		if err != nil {
+			continue
+		}
+		volumes = append(volumes, VolumeInfo{Index: idx, Path: m})
+	}
+
+	sort.Slice(volumes, func(i, j int) bool {
+		return volumes[i].Index < volumes[j].Index
+	})
+	return volumes, nil
 }
