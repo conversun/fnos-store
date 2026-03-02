@@ -138,6 +138,10 @@ export const uninstallApp = (appname: string, onEvent: SSECallback): SSEHandle =
   return streamSSE(`/api/apps/${appname}/uninstall`, onEvent);
 };
 
+export const reloadApps = (onEvent: SSECallback): SSEHandle => {
+  return streamSSE('/api/apps/reload', onEvent);
+};
+
 export interface MirrorOption {
   key: string;
   label: string;

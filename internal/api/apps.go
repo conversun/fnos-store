@@ -3,9 +3,11 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"fnos-store/internal/config"
 	"fnos-store/internal/core"
+	"fnos-store/internal/source"
 )
 
 func (s *Server) handleListApps(w http.ResponseWriter, r *http.Request) {
@@ -91,4 +93,63 @@ func (s *Server) handleDownloadFpk(w http.ResponseWriter, r *http.Request) {
 	cfg := s.configMgr.Get()
 	prefix := config.GitHubMirrorPrefix(cfg.Mirror, cfg)
 	http.Redirect(w, r, prefix+found.DownloadURL, http.StatusFound)
+}
+
+func (s *Server) handleReloadApps(w http.ResponseWriter, r *http.Request) {
+	stream, err := newSSEStream(w, r, "")
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "streaming not supported")
+		return
+	}
+
+	src, ok := s.source.(*source.FNOSAppsSource)
+	if !ok {
+		_ = stream.sendError("unsupported source type")
+		return
+	}
+
+	onProgress := func(p source.FetchProgress) {
+		var msg string
+		switch p.Status {
+		case "trying":
+			msg = fmt.Sprintf("正在使用 %s 加速...", p.Mirror)
+		case "failed":
+			msg = fmt.Sprintf("%s 连接失败", p.Mirror)
+		case "success":
+			msg = fmt.Sprintf("通过 %s 加载成功", p.Mirror)
+		}
+		_ = stream.sendProgress(progressPayload{Step: p.Status, Message: msg})
+	}
+
+	remoteApps, fetchErr := src.FetchAppsWithProgress(r.Context(), onProgress)
+	if fetchErr != nil {
+		_ = stream.sendProgress(progressPayload{
+			Step:    "error",
+			Message: "所有加速节点均无法连接，请更换加速节点或检查网络",
+		})
+		return
+	}
+
+	localApps, _ := core.ScanInstalled(s.appsDir)
+	var installedTags map[string]string
+	if s.cacheStore != nil {
+		installedTags = s.cacheStore.InstalledTags()
+	}
+
+	now := time.Now()
+	s.mu.Lock()
+	s.registry.Merge(localApps, remoteApps, installedTags)
+	s.lastCheck = now
+	s.mu.Unlock()
+
+	if s.cacheStore != nil {
+		s.cacheStore.SetLastCheckAt(now)
+	}
+	s.refreshRuntimeStatus()
+
+	apps := s.listRegistryApps()
+	_ = stream.sendProgress(progressPayload{
+		Step:    "done",
+		Message: fmt.Sprintf("加载完成，共 %d 款应用", len(apps)),
+	})
 }

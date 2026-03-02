@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu, ChevronsLeft, ChevronsRight, Search, X, Film, ArrowDownToLine, BookOpen, Wrench, Globe, LayoutList, ArrowUpDown } from 'lucide-react';
+import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu, ChevronsLeft, ChevronsRight, Search, X, Film, ArrowDownToLine, BookOpen, Wrench, Globe, LayoutList, ArrowUpDown, Loader2, CircleX, CircleCheck, WifiOff } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { Badge } from './components/ui/badge';
@@ -7,7 +7,7 @@ import AppList from './components/AppList';
 import AppDetailDialog from './components/AppDetailDialog';
 import ProgressOverlay from './components/ProgressOverlay';
 import SettingsDialog from './components/SettingsDialog';
-import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp, fetchStatus, fetchStoreUpdate, triggerStoreUpdate } from './api/client';
+import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp, fetchStatus, fetchStoreUpdate, triggerStoreUpdate, reloadApps } from './api/client';
 import type { AppInfo, AppOperation, SSECallback } from './api/client';
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
@@ -46,7 +46,8 @@ type SortKey = 'default' | 'downloads' | 'name' | 'updated';
 
 const App: React.FC = () => {
   const [apps, setApps] = useState<AppInfo[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loadStatus, setLoadStatus] = useState<'loading' | 'loaded' | 'retrying' | 'failed'>('loading');
+  const [loadMessages, setLoadMessages] = useState<{text: string; status: 'info' | 'success' | 'error'}[]>([]);
   const [checking, setChecking] = useState<boolean>(false);
   const [lastCheck, setLastCheck] = useState<string>('');
 
@@ -121,16 +122,60 @@ const App: React.FC = () => {
       }
   };
 
-  const loadApps = async () => {
+  const loadApps = async (autoReload = true) => {
     try {
       const data = await fetchApps();
       setApps(data.apps);
       setLastCheck(data.last_check);
+      if (data.apps.length > 0) {
+        setLoadStatus('loaded');
+      } else if (!data.last_check && autoReload) {
+        triggerReload();
+      } else {
+        setLoadStatus('loaded');
+      }
     } catch (error) {
       console.error('Failed to load apps:', error);
-    } finally {
-      setLoading(false);
+      triggerReload();
     }
+  };
+
+  const triggerReload = () => {
+    setLoadStatus('retrying');
+    setLoadMessages([]);
+
+    const handle = reloadApps((data) => {
+      if (data.step === 'trying') {
+        setLoadMessages(prev => [...prev, { text: data.message || '', status: 'info' }]);
+      } else if (data.step === 'failed') {
+        setLoadMessages(prev => {
+          const updated = [...prev];
+          if (updated.length > 0) {
+            updated[updated.length - 1] = { text: data.message || '', status: 'error' };
+          }
+          return updated;
+        });
+      } else if (data.step === 'success') {
+        setLoadMessages(prev => {
+          const updated = [...prev];
+          if (updated.length > 0) {
+            updated[updated.length - 1] = { text: data.message || '', status: 'success' };
+          }
+          return updated;
+        });
+      } else if (data.step === 'done') {
+        setLoadMessages(prev => [...prev, { text: data.message || '', status: 'success' }]);
+        loadApps(false);
+      } else if (data.step === 'error') {
+        setLoadMessages(prev => [...prev, { text: data.message || '', status: 'error' }]);
+        setLoadStatus('failed');
+      }
+    });
+
+    handle.promise.catch(() => {
+      setLoadStatus('failed');
+      setLoadMessages(prev => [...prev, { text: '网络连接失败', status: 'error' }]);
+    });
   };
 
   const createSSEHandler = useCallback((app: AppInfo, operation: 'install' | 'update' | 'uninstall'): SSECallback => (data) => {
@@ -792,18 +837,66 @@ const App: React.FC = () => {
         </header>
 
         <main className="flex-grow p-4 md:p-8 overflow-y-auto">
-          <AppList
-             apps={filteredApps}
-             loading={loading}
-             onInstall={handleInstall}
-             onUpdate={handleUpdate}
-             onUninstall={handleUninstall}
-             onDetail={setDetailApp}
-             onCancelOp={handleCancelOp}
-             filterType={activeFilter}
-             appOperations={appOperations}
-             searchQuery={searchQuery}
-           />
+          {loadStatus === 'loaded' ? (
+            <AppList
+               apps={filteredApps}
+               loading={false}
+               onInstall={handleInstall}
+               onUpdate={handleUpdate}
+               onUninstall={handleUninstall}
+               onDetail={setDetailApp}
+               onCancelOp={handleCancelOp}
+               filterType={activeFilter}
+               appOperations={appOperations}
+               searchQuery={searchQuery}
+             />
+          ) : loadStatus === 'loading' ? (
+            <div className="flex flex-col items-center justify-center h-64">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+              <p className="text-sm text-muted-foreground">正在加载应用列表...</p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-64 max-w-sm mx-auto">
+              {loadStatus === 'retrying' && (
+                <Loader2 className="h-8 w-8 animate-spin text-primary mb-6" />
+              )}
+              {loadStatus === 'failed' && (
+                <WifiOff className="h-8 w-8 text-muted-foreground mb-6" />
+              )}
+              <div className="w-full space-y-2 mb-6">
+                {loadMessages.map((msg, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm">
+                    {msg.status === 'info' && i === loadMessages.length - 1 ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />
+                    ) : msg.status === 'success' ? (
+                      <CircleCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                    ) : msg.status === 'error' ? (
+                      <CircleX className="h-3.5 w-3.5 text-destructive shrink-0" />
+                    ) : (
+                      <div className="h-3.5 w-3.5 shrink-0" />
+                    )}
+                    <span className={cn(
+                      msg.status === 'error' ? 'text-destructive' :
+                      msg.status === 'success' ? 'text-emerald-500' :
+                      'text-muted-foreground'
+                    )}>{msg.text}</span>
+                  </div>
+                ))}
+              </div>
+              {loadStatus === 'failed' && (
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={triggerReload}>
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                    重试
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setSettingsVisible(true)}>
+                    <Settings className="mr-1.5 h-3.5 w-3.5" />
+                    更换加速节点
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </main>
       </div>
 

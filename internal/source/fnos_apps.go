@@ -79,8 +79,21 @@ func (s *FNOSAppsSource) mirrorPrefix() string {
 	return config.GitHubMirrorPrefix(cfg.Mirror, cfg)
 }
 
+type FetchProgress struct {
+	Mirror string
+	URL    string
+	Status string
+	Error  string
+}
+
+type ProgressFunc func(FetchProgress)
+
 func (s *FNOSAppsSource) FetchApps(ctx context.Context) ([]RemoteApp, error) {
-	apps, raw, err := s.fetchRemote(ctx)
+	return s.FetchAppsWithProgress(ctx, nil)
+}
+
+func (s *FNOSAppsSource) FetchAppsWithProgress(ctx context.Context, onProgress ProgressFunc) ([]RemoteApp, error) {
+	apps, raw, err := s.fetchRemoteWithProgress(ctx, onProgress)
 	if err == nil {
 		_ = s.writeCache(raw)
 		return apps, nil
@@ -94,7 +107,7 @@ func (s *FNOSAppsSource) FetchApps(ctx context.Context) ([]RemoteApp, error) {
 	return nil, fmt.Errorf("fetch apps from remote failed: %w", err)
 }
 
-func (s *FNOSAppsSource) fetchRemote(ctx context.Context) ([]RemoteApp, []byte, error) {
+func (s *FNOSAppsSource) fetchRemoteWithProgress(ctx context.Context, onProgress ProgressFunc) ([]RemoteApp, []byte, error) {
 	var cfg config.Config
 	if s.configMgr != nil {
 		cfg = s.configMgr.Get()
@@ -105,17 +118,42 @@ func (s *FNOSAppsSource) fetchRemote(ctx context.Context) ([]RemoteApp, []byte, 
 
 	var lastErr error
 	for _, prefix := range prefixes {
+		label := mirrorLabelForPrefix(prefix)
 		u := s.appsURL
 		if prefix != "" {
 			u = prefix + s.appsURL
 		}
+
+		if onProgress != nil {
+			onProgress(FetchProgress{Mirror: label, URL: prefix, Status: "trying"})
+		}
+
 		apps, raw, err := s.fetchURL(ctx, u)
 		if err == nil {
+			if onProgress != nil {
+				onProgress(FetchProgress{Mirror: label, URL: prefix, Status: "success"})
+			}
 			return apps, raw, nil
+		}
+
+		if onProgress != nil {
+			onProgress(FetchProgress{Mirror: label, URL: prefix, Status: "failed", Error: err.Error()})
 		}
 		lastErr = err
 	}
 	return nil, nil, lastErr
+}
+
+func mirrorLabelForPrefix(prefix string) string {
+	if prefix == "" {
+		return "直连 GitHub"
+	}
+	for _, m := range config.GitHubMirrorOptions() {
+		if m.URL == prefix {
+			return m.Label
+		}
+	}
+	return prefix
 }
 
 func (s *FNOSAppsSource) fetchURL(ctx context.Context, url string) ([]RemoteApp, []byte, error) {
