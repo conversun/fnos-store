@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"fnos-store/internal/config"
 	"fnos-store/internal/core"
 )
 
@@ -60,4 +61,33 @@ func (s *Server) handleListApps(w http.ResponseWriter, r *http.Request) {
 		Apps:      respApps,
 		LastCheck: formatTimestamp(s.getLastCheck()),
 	})
+}
+
+func (s *Server) handleDownloadFpk(w http.ResponseWriter, r *http.Request) {
+	appName := r.PathValue("appname")
+	if appName == "" {
+		writeAPIError(w, http.StatusBadRequest, "missing app name")
+		return
+	}
+
+	apps := s.listRegistryApps()
+	var found *core.AppInfo
+	for i := range apps {
+		if apps[i].AppName == appName {
+			found = &apps[i]
+			break
+		}
+	}
+	if found == nil {
+		writeAPIError(w, http.StatusNotFound, "app not found")
+		return
+	}
+	if found.DownloadURL == "" {
+		writeAPIError(w, http.StatusNotFound, "no download available")
+		return
+	}
+
+	cfg := s.configMgr.Get()
+	prefix := config.GitHubMirrorPrefix(cfg.Mirror, cfg)
+	http.Redirect(w, r, prefix+found.DownloadURL, http.StatusFound)
 }

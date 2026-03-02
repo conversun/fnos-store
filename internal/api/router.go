@@ -86,6 +86,7 @@ func (s *Server) routes() {
 	s.Mux.HandleFunc("POST /api/apps/{appname}/install", s.handleInstall)
 	s.Mux.HandleFunc("POST /api/apps/{appname}/update", s.handleUpdate)
 	s.Mux.HandleFunc("POST /api/apps/{appname}/uninstall", s.handleUninstall)
+	s.Mux.HandleFunc("GET /api/apps/{appname}/download", s.handleDownloadFpk)
 	s.Mux.HandleFunc("POST /api/check", s.handleCheck)
 	s.Mux.HandleFunc("GET /api/status", s.handleStatus)
 	s.Mux.HandleFunc("GET /api/settings", s.handleGetSettings)

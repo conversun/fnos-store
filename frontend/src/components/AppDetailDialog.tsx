@@ -187,6 +187,17 @@ const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChan
         <Separator />
 
         <div className="flex justify-end gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            asChild
+            className="rounded-full px-4"
+          >
+            <a href={`/api/apps/${app.appname}/download`} download>
+              <Download className="mr-1.5 h-3.5 w-3.5" />
+              下载 fpk
+            </a>
+          </Button>
           {!isInstalled ? (
             <Button
               size="sm"
