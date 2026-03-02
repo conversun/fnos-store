@@ -54,6 +54,7 @@ func (s *Server) handleListApps(w http.ResponseWriter, r *http.Request) {
 			DownloadCount:    app.DownloadCount,
 			AppType:          app.AppType,
 			Category:         app.Category,
+			PostInstallNote:  app.PostInstallNote,
 		})
 	}
 

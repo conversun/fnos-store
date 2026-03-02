@@ -4,23 +4,24 @@ import "context"
 
 // RemoteApp represents an app available from a remote source.
 type RemoteApp struct {
-	AppName       string
-	DisplayName   string
-	Version       string
-	Description   string
-	HomepageURL   string
-	UpdatedAt     string
-	ReleaseTag    string
-	FilePrefix    string
-	FpkVersion    string
-	ServicePort   int
-	Platforms     []string
-	FpkURL        string
-	IconURL       string
-	DownloadCount int
-	AppType       string
-	Category      string
-	Source        string
+	AppName         string
+	DisplayName     string
+	Version         string
+	Description     string
+	HomepageURL     string
+	UpdatedAt       string
+	ReleaseTag      string
+	FilePrefix      string
+	FpkVersion      string
+	ServicePort     int
+	Platforms       []string
+	FpkURL          string
+	IconURL         string
+	DownloadCount   int
+	AppType         string
+	Category        string
+	Source          string
+	PostInstallNote string
 }
 
 // Source provides access to a remote app catalog.

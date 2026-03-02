@@ -36,6 +36,7 @@ type AppInfo struct {
 	Category          string
 	Status            AppStatus
 	HasRevisionUpdate bool
+	PostInstallNote   string
 }
 
 type Registry struct {
@@ -61,24 +62,25 @@ func (r *Registry) Merge(local []Manifest, remote []source.RemoteApp, installedT
 	for _, item := range remote {
 		localManifest, installed := localByName[item.AppName]
 		app := AppInfo{
-			AppName:       item.AppName,
-			DisplayName:   item.DisplayName,
-			Description:   item.Description,
-			HomepageURL:   item.HomepageURL,
-			UpdatedAt:     item.UpdatedAt,
-			ServicePort:   item.ServicePort,
-			Platform:      strings.Join(item.Platforms, ","),
-			Source:        item.Source,
-			IconURL:       item.IconURL,
-			Installed:     installed,
-			LatestVersion: item.Version,
-			ReleaseTag:    item.ReleaseTag,
-			FpkVersion:    item.FpkVersion,
-			DownloadURL:   item.FpkURL,
-			DownloadCount: item.DownloadCount,
-			AppType:       item.AppType,
-			Category:      item.Category,
-			Status:        AppStatusNotInstalled,
+			AppName:         item.AppName,
+			DisplayName:     item.DisplayName,
+			Description:     item.Description,
+			HomepageURL:     item.HomepageURL,
+			UpdatedAt:       item.UpdatedAt,
+			ServicePort:     item.ServicePort,
+			Platform:        strings.Join(item.Platforms, ","),
+			Source:          item.Source,
+			IconURL:         item.IconURL,
+			Installed:       installed,
+			LatestVersion:   item.Version,
+			ReleaseTag:      item.ReleaseTag,
+			FpkVersion:      item.FpkVersion,
+			DownloadURL:     item.FpkURL,
+			DownloadCount:   item.DownloadCount,
+			AppType:         item.AppType,
+			Category:        item.Category,
+			Status:          AppStatusNotInstalled,
+			PostInstallNote: item.PostInstallNote,
 		}
 
 		if installed {
