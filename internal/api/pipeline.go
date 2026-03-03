@@ -200,7 +200,18 @@ func runWithVirtualProgress(ctx context.Context, stream *sseStream, step, messag
 }
 
 func (p *installPipeline) dockerPull(ctx context.Context, stream *sseStream, fpkDir string, app core.AppInfo) error {
-	composePath := filepath.Join(fpkDir, "docker", "docker-compose.yaml")
+	// docker-compose.yaml is inside app.tgz, not at fpk top level
+	appTgz := filepath.Join(fpkDir, "app.tgz")
+	appDir := filepath.Join(fpkDir, "app-contents")
+	if err := os.MkdirAll(appDir, 0o755); err != nil {
+		return nil
+	}
+	if out, err := exec.CommandContext(ctx, "tar", "xzf", appTgz, "-C", appDir).CombinedOutput(); err != nil {
+		fmt.Fprintf(os.Stderr, "extract app.tgz: %v: %s\n", err, out)
+		return nil
+	}
+
+	composePath := filepath.Join(appDir, "docker", "docker-compose.yaml")
 	data, err := os.ReadFile(composePath)
 	if err != nil {
 		return nil
