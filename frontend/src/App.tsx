@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu, ChevronsLeft, ChevronsRight, Search, X, Film, ArrowDownToLine, BookOpen, Wrench, Globe, LayoutList, ArrowUpDown, Loader2, CircleX, CircleCheck, WifiOff } from 'lucide-react';
+import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu, ChevronsLeft, ChevronsRight, Search, X, Film, ArrowDownToLine, BookOpen, Wrench, Globe, LayoutList, ArrowUpDown, Loader2, CircleX, CircleCheck, WifiOff, ExternalLink, Package } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { Badge } from './components/ui/badge';
@@ -11,6 +11,12 @@ import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp, fetchStat
 import type { AppInfo, AppOperation, SSECallback } from './api/client';
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
@@ -62,6 +68,7 @@ const App: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<CategoryKey | null>(null);
   const [pendingUninstallApp, setPendingUninstallApp] = useState<AppInfo | null>(null);
   const [detailApp, setDetailApp] = useState<AppInfo | null>(null);
+  const [successInfo, setSuccessInfo] = useState<{app: AppInfo; operation: 'install' | 'update'} | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>('default');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() =>
     localStorage.getItem('sidebar-collapsed') === 'true'
@@ -202,19 +209,8 @@ const App: React.FC = () => {
 
       if (operation === 'uninstall') {
         toast.success(`${app.display_name} 已卸载`);
-      } else if (app.service_port) {
-        const label = operation === 'install' ? '安装成功' : '更新成功';
-        const note = operation === 'install' && app.post_install_note ? app.post_install_note : undefined;
-        toast.success(`${app.display_name} ${label}`, {
-          description: note,
-          duration: note ? 8000 : 4000,
-          action: {
-            label: '打开',
-            onClick: () => window.open(`${window.location.protocol}//${window.location.hostname}:${app.service_port}`, '_blank'),
-          },
-        });
       } else {
-        toast.success(`${app.display_name} ${operation === 'install' ? '安装成功' : '更新成功'}`);
+        setSuccessInfo({ app, operation });
       }
       return;
     }
@@ -945,6 +941,67 @@ const App: React.FC = () => {
         onUpdate={handleUpdate}
         operation={detailApp ? appOperations.get(detailApp.appname) : undefined}
       />
+
+      {successInfo && (
+        <Dialog open={!!successInfo} onOpenChange={(open) => !open && setSuccessInfo(null)}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                {successInfo.app.icon_url ? (
+                  <img
+                    src={successInfo.app.icon_url}
+                    alt={successInfo.app.display_name}
+                    className="w-12 h-12 rounded-xl object-cover bg-background shrink-0"
+                  />
+                ) : (
+                  <div className="w-12 h-12 bg-muted/60 rounded-xl flex items-center justify-center text-muted-foreground shrink-0">
+                    <Package className="h-6 w-6 opacity-40" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <DialogTitle className="text-base">{successInfo.app.display_name}</DialogTitle>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <CircleCheck className="h-3.5 w-3.5 text-emerald-500" />
+                    <span className="text-sm text-emerald-600">
+                      {successInfo.operation === 'install' ? '安装成功' : '更新成功'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </DialogHeader>
+
+            {successInfo.operation === 'install' && successInfo.app.post_install_note && (
+              <div className="bg-muted/50 rounded-lg p-3 text-sm text-muted-foreground leading-relaxed">
+                {successInfo.app.post_install_note}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-1">
+              {successInfo.app.service_port && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full px-4"
+                  onClick={() => {
+                    window.open(`${window.location.protocol}//${window.location.hostname}:${successInfo.app.service_port}`, '_blank');
+                    setSuccessInfo(null);
+                  }}
+                >
+                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                  打开
+                </Button>
+              )}
+              <Button
+                size="sm"
+                className="rounded-full px-4"
+                onClick={() => setSuccessInfo(null)}
+              >
+                确定
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <Toaster />
     </div>
