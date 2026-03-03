@@ -114,6 +114,7 @@ const App: React.FC = () => {
   const translateStep = (step?: string) => {
       switch(step) {
           case 'downloading': return '正在下载...';
+          case 'pulling': return '正在拉取镜像...';
           case 'installing': return '正在安装...';
           case 'verifying': return '正在验证...';
           case 'starting': return '正在启动...';

@@ -1,12 +1,15 @@
 package api
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"fnos-store/internal/config"
@@ -196,6 +199,87 @@ func runWithVirtualProgress(ctx context.Context, stream *sseStream, step, messag
 	}
 }
 
+func (p *installPipeline) dockerPull(ctx context.Context, stream *sseStream, fpkDir string, app core.AppInfo) error {
+	composePath := filepath.Join(fpkDir, "docker", "docker-compose.yaml")
+	data, err := os.ReadFile(composePath)
+	if err != nil {
+		return nil
+	}
+
+	image := parseDockerImage(string(data), app)
+	if image == "" {
+		return nil
+	}
+
+	_ = stream.sendProgress(progressPayload{Step: "pulling", Progress: 0, Message: "正在拉取 Docker 镜像..."})
+
+	cmd := exec.CommandContext(ctx, "docker", "pull", image)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil
+	}
+	cmd.Stderr = cmd.Stdout
+
+	if err := cmd.Start(); err != nil {
+		// docker not available — skip, let install-local handle it
+		return nil
+	}
+
+	var totalLayers, completedLayers int
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		line := scanner.Text()
+		switch {
+		case strings.Contains(line, "Pulling fs layer"), strings.Contains(line, "Waiting"):
+			totalLayers++
+		case strings.Contains(line, "Already exists"):
+			totalLayers++
+			completedLayers++
+		case strings.Contains(line, "Pull complete"):
+			completedLayers++
+		}
+		if totalLayers > 0 {
+			pct := completedLayers * 100 / totalLayers
+			if pct > 99 {
+				pct = 99
+			}
+			_ = stream.sendProgress(progressPayload{Step: "pulling", Progress: pct, Message: "正在拉取 Docker 镜像..."})
+		}
+	}
+
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("Docker 镜像拉取失败: %w", err)
+	}
+
+	_ = stream.sendProgress(progressPayload{Step: "pulling", Progress: 100, Message: "Docker 镜像拉取完成"})
+	return nil
+}
+
+func parseDockerImage(content string, app core.AppInfo) string {
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "image:") {
+			continue
+		}
+		image := strings.TrimSpace(strings.TrimPrefix(trimmed, "image:"))
+		if image == "" {
+			continue
+		}
+
+		mirror := os.Getenv("DOCKER_MIRROR")
+		image = strings.ReplaceAll(image, "${DOCKER_MIRROR}", mirror)
+
+		version := app.FpkVersion
+		if version == "" {
+			version = app.LatestVersion
+		}
+		image = strings.ReplaceAll(image, "${VERSION}", version)
+
+		return image
+	}
+	return ""
+}
+
 func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, opName string, app core.AppInfo, refreshFn func(context.Context) error) {
 	fpkPath, err := p.downloadFpk(ctx, stream, app)
 	if err != nil {
@@ -203,6 +287,18 @@ func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, op
 		return
 	}
 	defer os.Remove(fpkPath)
+
+	if app.AppType == "docker" {
+		dir, err := p.extractFpk(fpkPath)
+		if err == nil {
+			pullErr := p.dockerPull(ctx, stream, dir, app)
+			os.RemoveAll(dir)
+			if pullErr != nil {
+				_ = stream.sendError(pullErr.Error())
+				return
+			}
+		}
+	}
 
 	volume, err := p.resolveVolume()
 	if err != nil {

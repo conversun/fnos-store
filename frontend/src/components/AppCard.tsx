@@ -54,6 +54,7 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
   const getStepText = (step: string): string => {
     switch (step) {
       case 'downloading': return '正在下载...';
+      case 'pulling': return '正在拉取镜像...';
       case 'installing': return '正在安装...';
       case 'verifying': return '正在验证...';
       case 'starting': return '正在启动...';
@@ -156,11 +157,11 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
                 )}
               </div>
               
-              {operation.step === 'downloading' && operation.cancel && (
+              {(operation.step === 'downloading' || operation.step === 'pulling') && operation.cancel && (
                 <button
                   onClick={() => onCancelOp?.(app)}
                   className="shrink-0 p-0.5 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                  title="取消下载"
+                  title="取消"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
