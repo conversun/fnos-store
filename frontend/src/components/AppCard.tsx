@@ -11,7 +11,8 @@ import {
   Package,
   Circle,
   ArrowRight,
-  Container
+  Container,
+  X,
 } from 'lucide-react';
 
 interface AppCardProps {
@@ -155,18 +156,15 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
                 )}
               </div>
               
-              <div className="flex items-center gap-1.5">
-                {operation.step === 'downloading' && operation.cancel && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => onCancelOp?.(app)}
-                    className="rounded-full px-2.5 h-7 text-xs text-destructive hover:text-destructive"
-                  >
-                    取消
-                  </Button>
-                )}
-              </div>
+              {operation.step === 'downloading' && operation.cancel && (
+                <button
+                  onClick={() => onCancelOp?.(app)}
+                  className="shrink-0 p-0.5 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                  title="取消下载"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           </div>
         ) : (
