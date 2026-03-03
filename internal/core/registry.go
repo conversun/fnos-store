@@ -92,15 +92,27 @@ func (r *Registry) Merge(local []Manifest, remote []source.RemoteApp, installedT
 				app.Platform = localManifest.Platform
 			}
 
-			versionCmp := CompareVersions(localManifest.Version, item.Version)
-			installedTag := installedTags[item.AppName]
-			revisionUpdate := versionCmp == 0 && installedTag != item.ReleaseTag && hasRevisionUpdate(item.ReleaseTag, localManifest.Version)
-			if versionCmp < 0 || revisionUpdate {
-				app.Status = AppStatusUpdateAvailable
+			// Use fpk_version comparison if both versions are available
+			if localManifest.FpkVersion != "" && item.FpkVersion != "" {
+				fpkCmp := CompareFpkVersions(localManifest.FpkVersion, item.FpkVersion)
+				if fpkCmp < 0 {
+					app.Status = AppStatusUpdateAvailable
+				} else {
+					app.Status = AppStatusInstalledUpToDate
+				}
+				app.HasRevisionUpdate = false
 			} else {
-				app.Status = AppStatusInstalledUpToDate
+				// Fallback to existing logic: version comparison + installedTags + revision check
+				versionCmp := CompareVersions(localManifest.Version, item.Version)
+				installedTag := installedTags[item.AppName]
+				revisionUpdate := versionCmp == 0 && installedTag != item.ReleaseTag && hasRevisionUpdate(item.ReleaseTag, localManifest.Version)
+				if versionCmp < 0 || revisionUpdate {
+					app.Status = AppStatusUpdateAvailable
+				} else {
+					app.Status = AppStatusInstalledUpToDate
+				}
+				app.HasRevisionUpdate = revisionUpdate
 			}
-			app.HasRevisionUpdate = revisionUpdate
 		}
 
 		r.apps[app.AppName] = app

@@ -13,6 +13,7 @@ import (
 type Manifest struct {
 	AppName        string
 	Version        string
+	FpkVersion     string
 	DisplayName    string
 	Platform       string
 	Maintainer     string
@@ -55,6 +56,8 @@ func ParseManifest(path string) (*Manifest, error) {
 			m.AppName = value
 		case "version":
 			m.Version = value
+		case "fpk_version":
+			m.FpkVersion = value
 		case "display_name":
 			m.DisplayName = value
 		case "platform":

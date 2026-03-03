@@ -29,6 +29,46 @@ func CompareVersions(a, b string) int {
 	return 0
 }
 
+// CompareFpkVersions compares two fpk_version strings.
+// Returns:
+//   - 0 if versions are equal (up-to-date)
+//   - -1 if upgrade is needed (a < b)
+//   - 1 if downgrade (a > b)
+//
+// Comparison logic:
+// 1. If strings are equal, return 0
+// 2. Extract base version (everything before first '-')
+// 3. Compare base versions using CompareVersions
+// 4. If bases differ, return that result
+// 5. If bases are same but strings differ, return -1 (different revision = update available)
+func CompareFpkVersions(a, b string) int {
+	// If strings are exactly equal, versions match
+	if a == b {
+		return 0
+	}
+
+	// Extract base versions (everything before first '-')
+	baseA := a
+	if idx := strings.Index(a, "-"); idx >= 0 {
+		baseA = a[:idx]
+	}
+
+	baseB := b
+	if idx := strings.Index(b, "-"); idx >= 0 {
+		baseB = b[:idx]
+	}
+
+	// Compare base versions
+	baseCmp := CompareVersions(baseA, baseB)
+	if baseCmp != 0 {
+		return baseCmp
+	}
+
+	// Base versions are same but full strings differ (different revision)
+	// This means an update is available
+	return -1
+}
+
 func versionPartAsInt(parts []string, index int) int {
 	if index >= len(parts) {
 		return 0
