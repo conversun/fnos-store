@@ -110,6 +110,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		req.DockerMirror = config.DefaultDockerMirror
 	}
 
+	existing := s.configMgr.Get()
 	cfg := config.Config{
 		CheckIntervalHours: req.CheckIntervalHours,
 		Mirror:             req.Mirror,
@@ -117,6 +118,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		CustomGitHubMirror: req.CustomGitHubMirror,
 		CustomDockerMirror: req.CustomDockerMirror,
 		InstallVolume:      req.InstallVolume,
+		IgnoredApps:        existing.IgnoredApps,
 	}
 
 	if err := s.configMgr.SaveConfig(cfg); err != nil {

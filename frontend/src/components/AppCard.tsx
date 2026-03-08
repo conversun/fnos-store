@@ -13,6 +13,7 @@ import {
   ArrowRight,
   Container,
   X,
+  BellOff,
 } from 'lucide-react';
 
 interface AppCardProps {
@@ -99,6 +100,12 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
               {canUpdate && (
                 <Badge variant="secondary" className="bg-primary/10 text-primary border-0 font-medium px-1.5 h-5 text-[11px] shrink-0 rounded-full">
                   有更新
+                </Badge>
+              )}
+              {app.update_ignored && (
+                <Badge variant="secondary" className="bg-muted text-muted-foreground border-0 font-medium px-1.5 h-5 text-[11px] shrink-0 rounded-full gap-0.5">
+                  <BellOff className="h-2.5 w-2.5" />
+                  已忽略
                 </Badge>
               )}
             </div>

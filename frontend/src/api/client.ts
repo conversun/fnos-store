@@ -7,6 +7,7 @@ export interface AppInfo {
   latest_version: string;
   available_version?: string;
   has_update: boolean;
+  update_ignored?: boolean;
   platform: string;
   release_url: string;
   release_notes: string;
@@ -237,4 +238,18 @@ export const fetchStoreUpdate = async (): Promise<StoreUpdateInfo> => {
 
 export const triggerStoreUpdate = (onEvent: SSECallback): SSEHandle => {
   return streamSSE('/api/store-update', onEvent);
+};
+
+export const ignoreUpdate = async (appname: string): Promise<void> => {
+  const response = await fetch(`/api/apps/${appname}/ignore-update`, { method: 'PUT' });
+  if (!response.ok) {
+    throw new Error(`Failed to ignore update: ${response.statusText}`);
+  }
+};
+
+export const unignoreUpdate = async (appname: string): Promise<void> => {
+  const response = await fetch(`/api/apps/${appname}/ignore-update`, { method: 'DELETE' });
+  if (!response.ok) {
+    throw new Error(`Failed to unignore update: ${response.statusText}`);
+  }
 };

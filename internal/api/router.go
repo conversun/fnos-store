@@ -87,6 +87,8 @@ func (s *Server) routes() {
 	s.Mux.HandleFunc("POST /api/apps/{appname}/update", s.handleUpdate)
 	s.Mux.HandleFunc("POST /api/apps/{appname}/uninstall", s.handleUninstall)
 	s.Mux.HandleFunc("GET /api/apps/{appname}/download", s.handleDownloadFpk)
+	s.Mux.HandleFunc("PUT /api/apps/{appname}/ignore-update", s.handleIgnoreUpdate)
+	s.Mux.HandleFunc("DELETE /api/apps/{appname}/ignore-update", s.handleUnignoreUpdate)
 	s.Mux.HandleFunc("POST /api/apps/reload", s.handleReloadApps)
 	s.Mux.HandleFunc("POST /api/check", s.handleCheck)
 	s.Mux.HandleFunc("GET /api/status", s.handleStatus)

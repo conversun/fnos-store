@@ -13,9 +13,10 @@ func (s *Server) handleCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	apps := s.listRegistryApps()
+	cfg := s.configMgr.Get()
 	updates := 0
 	for _, app := range apps {
-		if app.Status == core.AppStatusUpdateAvailable {
+		if app.Status == core.AppStatusUpdateAvailable && !cfg.IsAppIgnored(app.AppName) {
 			updates++
 		}
 	}

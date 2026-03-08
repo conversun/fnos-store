@@ -7,7 +7,7 @@ import AppList from './components/AppList';
 import AppDetailDialog from './components/AppDetailDialog';
 import ProgressOverlay from './components/ProgressOverlay';
 import SettingsDialog from './components/SettingsDialog';
-import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp, fetchStatus, fetchStoreUpdate, triggerStoreUpdate, reloadApps } from './api/client';
+import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp, fetchStatus, fetchStoreUpdate, triggerStoreUpdate, reloadApps, ignoreUpdate, unignoreUpdate } from './api/client';
 import type { AppInfo, AppOperation, SSECallback } from './api/client';
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
@@ -372,6 +372,26 @@ const App: React.FC = () => {
       loadApps();
     }
   }, [appOperations, setAppOp]);
+
+  const handleIgnoreUpdate = useCallback(async (app: AppInfo) => {
+    try {
+      await ignoreUpdate(app.appname);
+      await loadApps();
+      toast.success(`${app.display_name} 已忽略更新`);
+    } catch {
+      toast.error('忽略更新失败');
+    }
+  }, []);
+
+  const handleUnignoreUpdate = useCallback(async (app: AppInfo) => {
+    try {
+      await unignoreUpdate(app.appname);
+      await loadApps();
+      toast.success(`${app.display_name} 已取消忽略更新`);
+    } catch {
+      toast.error('取消忽略更新失败');
+    }
+  }, []);
 
   const handleStoreUpdate = useCallback(async () => {
     setSelfUpdateActive(true);
@@ -939,6 +959,8 @@ const App: React.FC = () => {
         onOpenChange={(open) => !open && setDetailApp(null)}
         onInstall={handleInstall}
         onUpdate={handleUpdate}
+        onIgnoreUpdate={handleIgnoreUpdate}
+        onUnignoreUpdate={handleUnignoreUpdate}
         operation={detailApp ? appOperations.get(detailApp.appname) : undefined}
       />
 

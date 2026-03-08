@@ -90,12 +90,23 @@ func GitHubFallbackPrefixes(selectedKey string, cfg Config) []string {
 
 // Config holds the persistent store configuration.
 type Config struct {
-	CheckIntervalHours int    `json:"check_interval_hours"`
-	Mirror             string `json:"mirror"`
-	DockerMirror       string `json:"docker_mirror"`
-	CustomGitHubMirror string `json:"custom_github_mirror,omitempty"`
-	CustomDockerMirror string `json:"custom_docker_mirror,omitempty"`
-	InstallVolume      int    `json:"install_volume"`
+	CheckIntervalHours int      `json:"check_interval_hours"`
+	Mirror             string   `json:"mirror"`
+	DockerMirror       string   `json:"docker_mirror"`
+	CustomGitHubMirror string   `json:"custom_github_mirror,omitempty"`
+	CustomDockerMirror string   `json:"custom_docker_mirror,omitempty"`
+	InstallVolume      int      `json:"install_volume"`
+	IgnoredApps        []string `json:"ignored_apps,omitempty"`
+}
+
+// IsAppIgnored returns true if the given app is in the ignored list.
+func (c Config) IsAppIgnored(appName string) bool {
+	for _, name := range c.IgnoredApps {
+		if name == appName {
+			return true
+		}
+	}
+	return false
 }
 
 // Manager handles loading and saving config to disk.

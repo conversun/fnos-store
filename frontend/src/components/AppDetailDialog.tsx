@@ -21,6 +21,8 @@ import {
   Circle,
   Download,
   RefreshCw,
+  BellOff,
+  Bell,
 } from 'lucide-react';
 
 interface AppDetailDialogProps {
@@ -29,10 +31,12 @@ interface AppDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   onInstall: (app: AppInfo) => void;
   onUpdate: (app: AppInfo) => void;
+  onIgnoreUpdate?: (app: AppInfo) => void;
+  onUnignoreUpdate?: (app: AppInfo) => void;
   operation?: AppOperation;
 }
 
-const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChange, onInstall, onUpdate }) => {
+const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChange, onInstall, onUpdate, onIgnoreUpdate, onUnignoreUpdate }) => {
   if (!app) return null;
 
   const isInstalled = app.installed;
@@ -109,6 +113,12 @@ const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChan
                 {canUpdate && (
                   <Badge variant="secondary" className="bg-primary/10 text-primary border-0 font-medium px-1.5 h-5 text-[11px] rounded-full">
                     有更新
+                  </Badge>
+                )}
+                {app.update_ignored && (
+                  <Badge variant="secondary" className="bg-muted text-muted-foreground border-0 font-medium px-1.5 h-5 text-[11px] rounded-full gap-0.5">
+                    <BellOff className="h-2.5 w-2.5" />
+                    已忽略更新
                   </Badge>
                 )}
               </div>
@@ -198,6 +208,17 @@ const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChan
               下载 fpk
             </a>
           </Button>
+          {app.update_ignored && onUnignoreUpdate && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onUnignoreUpdate(app)}
+              className="rounded-full px-4 text-muted-foreground"
+            >
+              <Bell className="mr-1.5 h-3.5 w-3.5" />
+              取消忽略
+            </Button>
+          )}
           {!isInstalled ? (
             <Button
               size="sm"
@@ -208,15 +229,28 @@ const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChan
               安装
             </Button>
           ) : canUpdate ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => { onOpenChange(false); onUpdate(app); }}
-              className="rounded-full px-4 border-primary text-primary hover:bg-primary/10"
-            >
-              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-              更新
-            </Button>
+            <>
+              {onIgnoreUpdate && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onIgnoreUpdate(app)}
+                  className="rounded-full px-4 text-muted-foreground"
+                >
+                  <BellOff className="mr-1.5 h-3.5 w-3.5" />
+                  忽略更新
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => { onOpenChange(false); onUpdate(app); }}
+                className="rounded-full px-4 border-primary text-primary hover:bg-primary/10"
+              >
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                更新
+              </Button>
+            </>
           ) : null}
         </div>
       </DialogContent>

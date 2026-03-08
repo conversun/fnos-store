@@ -12,6 +12,7 @@ import (
 
 func (s *Server) handleListApps(w http.ResponseWriter, r *http.Request) {
 	apps := s.listRegistryApps()
+	cfg := s.configMgr.Get()
 	respApps := make([]appResponse, 0, len(apps))
 	for _, app := range apps {
 		if s.storeApp != "" && app.AppName == s.storeApp {
@@ -31,8 +32,14 @@ func (s *Server) handleListApps(w http.ResponseWriter, r *http.Request) {
 		}
 
 		hasUpdate := app.Status == core.AppStatusUpdateAvailable
+		updateIgnored := false
+		if hasUpdate && cfg.IsAppIgnored(app.AppName) {
+			hasUpdate = false
+			updateIgnored = true
+		}
+
 		availableVersion := ""
-		if hasUpdate && app.FpkVersion != "" {
+		if (hasUpdate || updateIgnored) && app.FpkVersion != "" {
 			availableVersion = app.FpkVersion
 		}
 
@@ -45,6 +52,7 @@ func (s *Server) handleListApps(w http.ResponseWriter, r *http.Request) {
 			LatestVersion:    app.LatestVersion,
 			AvailableVersion: availableVersion,
 			HasUpdate:        hasUpdate,
+			UpdateIgnored:    updateIgnored,
 			Platform:         app.Platform,
 			ReleaseURL:       releaseURL,
 			ReleaseNotes:     "",
@@ -64,6 +72,52 @@ func (s *Server) handleListApps(w http.ResponseWriter, r *http.Request) {
 		Apps:      respApps,
 		LastCheck: formatTimestamp(s.getLastCheck()),
 	})
+}
+
+func (s *Server) handleIgnoreUpdate(w http.ResponseWriter, r *http.Request) {
+	appName := r.PathValue("appname")
+	if appName == "" {
+		writeAPIError(w, http.StatusBadRequest, "missing app name")
+		return
+	}
+
+	cfg := s.configMgr.Get()
+	if cfg.IsAppIgnored(appName) {
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		return
+	}
+
+	cfg.IgnoredApps = append(cfg.IgnoredApps, appName)
+	if err := s.configMgr.SaveConfig(cfg); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *Server) handleUnignoreUpdate(w http.ResponseWriter, r *http.Request) {
+	appName := r.PathValue("appname")
+	if appName == "" {
+		writeAPIError(w, http.StatusBadRequest, "missing app name")
+		return
+	}
+
+	cfg := s.configMgr.Get()
+	filtered := make([]string, 0, len(cfg.IgnoredApps))
+	for _, name := range cfg.IgnoredApps {
+		if name != appName {
+			filtered = append(filtered, name)
+		}
+	}
+	cfg.IgnoredApps = filtered
+
+	if err := s.configMgr.SaveConfig(cfg); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (s *Server) handleDownloadFpk(w http.ResponseWriter, r *http.Request) {

@@ -9,6 +9,7 @@ type appResponse struct {
 	LatestVersion    string `json:"latest_version"`
 	AvailableVersion string `json:"available_version,omitempty"`
 	HasUpdate        bool   `json:"has_update"`
+	UpdateIgnored    bool   `json:"update_ignored,omitempty"`
 	Platform         string `json:"platform"`
 	ReleaseURL       string `json:"release_url"`
 	ReleaseNotes     string `json:"release_notes"`
