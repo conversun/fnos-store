@@ -43,6 +43,11 @@ func main() {
 
 	ac := platform.NewAppCenter(projectRoot)
 	src := source.NewFNOSAppsSource(cachePath, cfgMgr)
+	recommendedSrc := source.NewRecommendedSource(
+		filepath.Join(dataDir, "cache", "recommended.json"),
+		filepath.Join(projectRoot, "..", "fnos-apps", "recommended.json"),
+		cfgMgr,
+	)
 	reg := core.NewRegistry()
 	downloader := core.NewDownloader(downloadDir)
 	if err := downloader.CleanupStaleTmpFiles(); err != nil {
@@ -52,16 +57,17 @@ func main() {
 	checkInterval := time.Duration(cfg.CheckIntervalHours) * time.Hour
 
 	srv := api.NewServer(api.Config{
-		AppCenter:  ac,
-		Source:     src,
-		Registry:   reg,
-		Downloader: downloader,
-		ConfigMgr:  cfgMgr,
-		CacheStore: cacheStore,
-		AppsDir:    appsDir,
-		Platform:   platform.DetectPlatform(),
-		StoreApp:   storeAppName,
-		StaticFS:   storeassets.WebFS,
+		AppCenter:         ac,
+		Source:            src,
+		RecommendedSource: recommendedSrc,
+		Registry:          reg,
+		Downloader:        downloader,
+		ConfigMgr:         cfgMgr,
+		CacheStore:        cacheStore,
+		AppsDir:           appsDir,
+		Platform:          platform.DetectPlatform(),
+		StoreApp:          storeAppName,
+		StaticFS:          storeassets.WebFS,
 	})
 
 	sched := scheduler.New(checkInterval, srv.RefreshRegistry, cacheStore.LastCheckAt)

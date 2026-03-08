@@ -29,6 +29,21 @@ type appsListResponse struct {
 	LastCheck string        `json:"last_check"`
 }
 
+type recommendedAppResponse struct {
+	Name          string `json:"name"`
+	DisplayName   string `json:"display_name"`
+	Description   string `json:"description"`
+	IconURL       string `json:"icon_url"`
+	SourceURL     string `json:"source_url"`
+	GitHubRepo    string `json:"github_repo,omitempty"`
+	LatestVersion string `json:"latest_version,omitempty"`
+	UpdatedAt     string `json:"updated_at,omitempty"`
+}
+
+type recommendedListResponse struct {
+	Apps []recommendedAppResponse `json:"apps"`
+}
+
 type checkResponse struct {
 	Status           string `json:"status"`
 	Checked          int    `json:"checked"`

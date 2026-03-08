@@ -17,48 +17,52 @@ import (
 )
 
 type Server struct {
-	Mux         *http.ServeMux
-	ac          platform.AppCenter
-	source      source.Source
-	registry    *core.Registry
-	queue       *OperationQueue
-	pipeline    *installPipeline
-	configMgr   *config.Manager
-	cacheStore  *cache.Store
-	scheduler   *scheduler.Scheduler
-	appsDir     string
-	platform    string
-	storeApp    string
-	staticFS    fs.FS
-	lastCheck   time.Time
-	statusByApp map[string]string
+	Mux               *http.ServeMux
+	ac                platform.AppCenter
+	source            source.Source
+	recommendedSource *source.RecommendedSource
+	registry          *core.Registry
+	queue             *OperationQueue
+	pipeline          *installPipeline
+	configMgr         *config.Manager
+	cacheStore        *cache.Store
+	scheduler         *scheduler.Scheduler
+	appsDir           string
+	platform          string
+	storeApp          string
+	staticFS          fs.FS
+	lastCheck         time.Time
+	statusByApp       map[string]string
+	recommendedApps   []source.RecommendedApp
 
 	mu               sync.RWMutex
 	refreshDebouncer *refreshDebouncer
 }
 
 type Config struct {
-	AppCenter  platform.AppCenter
-	Source     source.Source
-	Registry   *core.Registry
-	Downloader *core.Downloader
-	ConfigMgr  *config.Manager
-	CacheStore *cache.Store
-	Scheduler  *scheduler.Scheduler
-	AppsDir    string
-	Platform   string
-	StoreApp   string
-	StaticFS   fs.FS
+	AppCenter         platform.AppCenter
+	Source            source.Source
+	RecommendedSource *source.RecommendedSource
+	Registry          *core.Registry
+	Downloader        *core.Downloader
+	ConfigMgr         *config.Manager
+	CacheStore        *cache.Store
+	Scheduler         *scheduler.Scheduler
+	AppsDir           string
+	Platform          string
+	StoreApp          string
+	StaticFS          fs.FS
 }
 
 func NewServer(cfg Config) *Server {
 	queue := NewOperationQueue()
 	s := &Server{
-		Mux:      http.NewServeMux(),
-		ac:       cfg.AppCenter,
-		source:   cfg.Source,
-		registry: cfg.Registry,
-		queue:    queue,
+		Mux:               http.NewServeMux(),
+		ac:                cfg.AppCenter,
+		source:            cfg.Source,
+		recommendedSource: cfg.RecommendedSource,
+		registry:          cfg.Registry,
+		queue:             queue,
 		pipeline: &installPipeline{
 			downloads:  cfg.Downloader,
 			ac:         cfg.AppCenter,
@@ -77,12 +81,14 @@ func NewServer(cfg Config) *Server {
 		refreshDebouncer: &refreshDebouncer{},
 	}
 	s.routes()
+	_ = s.refreshRecommended(context.Background())
 	_ = s.refreshRegistry(context.Background())
 	return s
 }
 
 func (s *Server) routes() {
 	s.Mux.HandleFunc("GET /api/apps", s.handleListApps)
+	s.Mux.HandleFunc("GET /api/recommended", s.handleListRecommended)
 	s.Mux.HandleFunc("POST /api/apps/{appname}/install", s.handleInstall)
 	s.Mux.HandleFunc("POST /api/apps/{appname}/update", s.handleUpdate)
 	s.Mux.HandleFunc("POST /api/apps/{appname}/uninstall", s.handleUninstall)

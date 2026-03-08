@@ -27,6 +27,21 @@ export interface AppsResponse {
   last_check: string;
 }
 
+export interface RecommendedApp {
+  name: string;
+  display_name: string;
+  description: string;
+  icon_url: string;
+  source_url: string;
+  github_repo?: string;
+  latest_version?: string;
+  updated_at?: string;
+}
+
+export interface RecommendedAppsResponse {
+  apps: RecommendedApp[];
+}
+
 export interface CheckResponse {
   status: string;
   checked: number;
@@ -60,6 +75,14 @@ export const fetchApps = async (): Promise<AppsResponse> => {
   const response = await fetch('/api/apps');
   if (!response.ok) {
     throw new Error(`Failed to fetch apps: ${response.statusText}`);
+  }
+  return response.json();
+};
+
+export const fetchRecommended = async (): Promise<RecommendedAppsResponse> => {
+  const response = await fetch('/api/recommended');
+  if (!response.ok) {
+    return { apps: [] };
   }
   return response.json();
 };

@@ -8,6 +8,7 @@ import (
 
 	"fnos-store/internal/core"
 	"fnos-store/internal/platform"
+	"fnos-store/internal/source"
 )
 
 type refreshDebouncer struct {
@@ -46,6 +47,10 @@ func (s *Server) refreshRegistry(ctx context.Context) error {
 		s.cacheStore.SetLastCheckAt(now)
 	}
 
+	if err := s.refreshRecommended(ctx); err != nil {
+		return err
+	}
+
 	s.refreshRuntimeStatus()
 	return nil
 }
@@ -79,6 +84,23 @@ func (s *Server) refreshRuntimeStatus() {
 	s.mu.Unlock()
 }
 
+func (s *Server) refreshRecommended(ctx context.Context) error {
+	if s.recommendedSource == nil {
+		return nil
+	}
+
+	apps, err := s.recommendedSource.FetchRecommendedApps(ctx)
+	if err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	s.recommendedApps = append([]source.RecommendedApp(nil), apps...)
+	s.mu.Unlock()
+
+	return nil
+}
+
 func (s *Server) listRegistryApps() []core.AppInfo {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -86,6 +108,12 @@ func (s *Server) listRegistryApps() []core.AppInfo {
 		return nil
 	}
 	return s.registry.List()
+}
+
+func (s *Server) listRecommendedApps() []source.RecommendedApp {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]source.RecommendedApp(nil), s.recommendedApps...)
 }
 
 func (s *Server) getRegistryApp(name string) (core.AppInfo, bool) {

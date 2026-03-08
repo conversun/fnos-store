@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu, ChevronsLeft, ChevronsRight, Search, X, Film, ArrowDownToLine, BookOpen, Wrench, Globe, LayoutList, ArrowUpDown, Loader2, CircleX, CircleCheck, WifiOff, ExternalLink, Package } from 'lucide-react';
+import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu, ChevronsLeft, ChevronsRight, Search, X, Film, ArrowDownToLine, BookOpen, Wrench, Globe, LayoutList, ArrowUpDown, Loader2, CircleX, CircleCheck, WifiOff, ExternalLink, Package, Compass } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { Badge } from './components/ui/badge';
@@ -7,8 +7,9 @@ import AppList from './components/AppList';
 import AppDetailDialog from './components/AppDetailDialog';
 import ProgressOverlay from './components/ProgressOverlay';
 import SettingsDialog from './components/SettingsDialog';
-import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp, fetchStatus, fetchStoreUpdate, triggerStoreUpdate, reloadApps, ignoreUpdate, unignoreUpdate } from './api/client';
-import type { AppInfo, AppOperation, SSECallback } from './api/client';
+import RecommendedAppCard from './components/RecommendedAppCard';
+import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp, fetchStatus, fetchStoreUpdate, triggerStoreUpdate, reloadApps, ignoreUpdate, unignoreUpdate, fetchRecommended } from './api/client';
+import type { AppInfo, AppOperation, SSECallback, RecommendedApp } from './api/client';
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
 import {
@@ -63,7 +64,8 @@ const App: React.FC = () => {
 
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [storeHasUpdate, setStoreHasUpdate] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'installed' | 'update_available'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'installed' | 'update_available' | 'recommended'>('all');
+  const [recommendedApps, setRecommendedApps] = useState<RecommendedApp[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<CategoryKey | null>(null);
   const [pendingUninstallApp, setPendingUninstallApp] = useState<AppInfo | null>(null);
@@ -85,6 +87,7 @@ const App: React.FC = () => {
   useEffect(() => {
     loadApps();
     fetchStoreUpdate().then(info => setStoreHasUpdate(info.has_update)).catch(() => {});
+    fetchRecommended().then(data => setRecommendedApps(data.apps)).catch(() => {});
   }, []);
 
   const setAppOp = useCallback((appname: string, op: AppOperation | null) => {
@@ -459,7 +462,8 @@ const App: React.FC = () => {
   const counts = {
       all: apps.length,
       installed: apps.filter(a => a.installed).length,
-      update_available: apps.filter(a => a.has_update).length
+      update_available: apps.filter(a => a.has_update).length,
+      recommended: recommendedApps.length
   };
 
   const categoryCounts = CATEGORIES.reduce((acc, cat) => {
@@ -496,6 +500,24 @@ const App: React.FC = () => {
 
          <div className="flex-1 overflow-y-auto">
           <nav className={cn("space-y-1", sidebarCollapsed ? "p-2" : "p-4")}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={activeFilter === 'recommended' ? 'secondary' : 'ghost'}
+                  className={cn("w-full h-10 shadow-none text-blue-600 hover:text-blue-700 dark:text-blue-500 dark:hover:text-blue-400", sidebarCollapsed ? "justify-center px-0" : "justify-start px-3")}
+                  onClick={() => { setActiveFilter('recommended'); setActiveCategory(null); }}
+                >
+                  <Compass className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
+                  {!sidebarCollapsed && (
+                    <>
+                      <span className="flex-1 text-left whitespace-nowrap">发现</span>
+                      <span className="ml-auto text-xs opacity-80 tabular-nums">{counts.recommended}</span>
+                    </>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              {sidebarCollapsed && <TooltipContent side="right">发现 ({counts.recommended})</TooltipContent>}
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -562,54 +584,56 @@ const App: React.FC = () => {
               )}
             </Tooltip>
           </nav>
-
-          <div className={cn("border-t border-border", sidebarCollapsed ? "p-2 pt-3" : "px-4 pb-4 pt-3")}>
-            {!sidebarCollapsed && (
-              <p className="text-xs font-medium text-muted-foreground mb-2 px-3">分类</p>
-            )}
-            <div className="space-y-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={activeCategory === null ? 'secondary' : 'ghost'}
-                    className={cn("w-full h-10 shadow-none", sidebarCollapsed ? "justify-center px-0" : "justify-start px-3")}
-                    onClick={() => setActiveCategory(null)}
-                  >
-                    <LayoutList className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
-                    {!sidebarCollapsed && (
-                      <span className="flex-1 text-left whitespace-nowrap">全部</span>
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                {sidebarCollapsed && <TooltipContent side="right">全部</TooltipContent>}
-              </Tooltip>
-              {CATEGORIES.map(cat => {
-                const Icon = cat.icon;
-                const isActive = activeCategory === cat.key;
-                const count = categoryCounts[cat.key];
-                return (
-                  <Tooltip key={cat.key}>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant={isActive ? 'secondary' : 'ghost'}
-                        className={cn("w-full h-10 shadow-none", sidebarCollapsed ? "justify-center px-0" : "justify-start px-3")}
-                        onClick={() => setActiveCategory(cat.key)}
-                      >
-                        <Icon className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
-                        {!sidebarCollapsed && (
-                          <>
-                            <span className="flex-1 text-left whitespace-nowrap">{cat.label}</span>
-                            <span className="ml-auto text-xs text-muted-foreground tabular-nums">{count}</span>
-                          </>
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    {sidebarCollapsed && <TooltipContent side="right">{cat.label} ({count})</TooltipContent>}
-                  </Tooltip>
-                );
-              })}
+          
+          {activeFilter !== 'recommended' && (
+            <div className={cn("border-t border-border", sidebarCollapsed ? "p-2 pt-3" : "px-4 pb-4 pt-3")}>
+              {!sidebarCollapsed && (
+                <p className="text-xs font-medium text-muted-foreground mb-2 px-3">分类</p>
+              )}
+              <div className="space-y-1">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={activeCategory === null ? 'secondary' : 'ghost'}
+                      className={cn("w-full h-10 shadow-none", sidebarCollapsed ? "justify-center px-0" : "justify-start px-3")}
+                      onClick={() => setActiveCategory(null)}
+                    >
+                      <LayoutList className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
+                      {!sidebarCollapsed && (
+                        <span className="flex-1 text-left whitespace-nowrap">全部</span>
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  {sidebarCollapsed && <TooltipContent side="right">全部</TooltipContent>}
+                </Tooltip>
+                {CATEGORIES.map(cat => {
+                  const Icon = cat.icon;
+                  const isActive = activeCategory === cat.key;
+                  const count = categoryCounts[cat.key];
+                  return (
+                    <Tooltip key={cat.key}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={isActive ? 'secondary' : 'ghost'}
+                          className={cn("w-full h-10 shadow-none", sidebarCollapsed ? "justify-center px-0" : "justify-start px-3")}
+                          onClick={() => setActiveCategory(cat.key)}
+                        >
+                          <Icon className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
+                          {!sidebarCollapsed && (
+                            <>
+                              <span className="flex-1 text-left whitespace-nowrap">{cat.label}</span>
+                              <span className="ml-auto text-xs text-muted-foreground tabular-nums">{count}</span>
+                            </>
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      {sidebarCollapsed && <TooltipContent side="right">{cat.label} ({count})</TooltipContent>}
+                    </Tooltip>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
          </div>
 
          <div className={cn("mt-auto border-t border-border space-y-1", sidebarCollapsed ? "p-2" : "p-4")}>
@@ -673,6 +697,15 @@ const App: React.FC = () => {
                              </div>
                              <nav className="flex-1 p-4 space-y-1">
                                  <Button
+                                   variant={activeFilter === 'recommended' ? 'secondary' : 'ghost'}
+                                   className="w-full justify-start h-10 px-3 shadow-none text-blue-600 hover:text-blue-700 dark:text-blue-500 dark:hover:text-blue-400"
+                                   onClick={() => { setActiveFilter('recommended'); setActiveCategory(null); }}
+                                 >
+                                    <Compass className="mr-3 h-4 w-4 shrink-0" />
+                                    <span className="flex-1 text-left">发现</span>
+                                    <span className="ml-auto text-xs opacity-80 tabular-nums">{counts.recommended}</span>
+                                 </Button>
+                                 <Button
                                    variant={activeFilter === 'all' ? 'secondary' : 'ghost'}
                                    className="w-full justify-start h-10 px-3 shadow-none"
                                    onClick={() => setActiveFilter('all')}
@@ -704,36 +737,38 @@ const App: React.FC = () => {
                                     )}
                                  </Button>
                               </nav>
-                              <div className="px-4 pt-3 border-t border-border">
-                                <p className="text-xs font-medium text-muted-foreground mb-2 px-3">分类</p>
-                                <div className="space-y-1">
-                                  <Button
-                                    variant={activeCategory === null ? 'secondary' : 'ghost'}
-                                    className="w-full justify-start h-10 px-3 shadow-none"
-                                    onClick={() => setActiveCategory(null)}
-                                  >
-                                    <LayoutList className="mr-3 h-4 w-4 shrink-0" />
-                                    <span className="flex-1 text-left">全部</span>
-                                  </Button>
-                                  {CATEGORIES.map(cat => {
-                                    const Icon = cat.icon;
-                                    const isActive = activeCategory === cat.key;
-                                    const count = categoryCounts[cat.key];
-                                    return (
-                                      <Button
-                                        key={cat.key}
-                                        variant={isActive ? 'secondary' : 'ghost'}
-                                        className="w-full justify-start h-10 px-3 shadow-none"
-                                        onClick={() => setActiveCategory(cat.key)}
-                                      >
-                                        <Icon className="mr-3 h-4 w-4 shrink-0" />
-                                        <span className="flex-1 text-left">{cat.label}</span>
-                                        <span className="ml-auto text-xs text-muted-foreground tabular-nums">{count}</span>
-                                      </Button>
-                                    );
-                                  })}
+                              {activeFilter !== 'recommended' && (
+                                <div className="px-4 pt-3 border-t border-border">
+                                  <p className="text-xs font-medium text-muted-foreground mb-2 px-3">分类</p>
+                                  <div className="space-y-1">
+                                    <Button
+                                      variant={activeCategory === null ? 'secondary' : 'ghost'}
+                                      className="w-full justify-start h-10 px-3 shadow-none"
+                                      onClick={() => setActiveCategory(null)}
+                                    >
+                                      <LayoutList className="mr-3 h-4 w-4 shrink-0" />
+                                      <span className="flex-1 text-left">全部</span>
+                                    </Button>
+                                    {CATEGORIES.map(cat => {
+                                      const Icon = cat.icon;
+                                      const isActive = activeCategory === cat.key;
+                                      const count = categoryCounts[cat.key];
+                                      return (
+                                        <Button
+                                          key={cat.key}
+                                          variant={isActive ? 'secondary' : 'ghost'}
+                                          className="w-full justify-start h-10 px-3 shadow-none"
+                                          onClick={() => setActiveCategory(cat.key)}
+                                        >
+                                          <Icon className="mr-3 h-4 w-4 shrink-0" />
+                                          <span className="flex-1 text-left">{cat.label}</span>
+                                          <span className="ml-auto text-xs text-muted-foreground tabular-nums">{count}</span>
+                                        </Button>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
-                              </div>
+                              )}
                               <div className="p-4 mt-auto border-t border-border space-y-1">
                                  <Button
                                    variant="ghost"
@@ -762,78 +797,87 @@ const App: React.FC = () => {
                     <h1 className="text-xl font-bold">fnOS Apps</h1>
                 </div>
             </div>
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <Input
-                type="text"
-                placeholder="搜索应用..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-8 h-9 shadow-none"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-            <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
-              <SelectTrigger className="w-full h-9 shadow-none">
-                <ArrowUpDown className="h-3.5 w-3.5 mr-1.5" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="default">默认</SelectItem>
-                <SelectItem value="downloads">下载量</SelectItem>
-                <SelectItem value="name">名称</SelectItem>
-                <SelectItem value="updated">最近更新</SelectItem>
-              </SelectContent>
-            </Select>
+            {activeFilter !== 'recommended' && (
+              <>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="text"
+                    placeholder="搜索应用..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-8 h-9 shadow-none"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
+                  <SelectTrigger className="w-full h-9 shadow-none">
+                    <ArrowUpDown className="h-3.5 w-3.5 mr-1.5" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">默认</SelectItem>
+                    <SelectItem value="downloads">下载量</SelectItem>
+                    <SelectItem value="name">名称</SelectItem>
+                    <SelectItem value="updated">最近更新</SelectItem>
+                  </SelectContent>
+                </Select>
+              </>
+            )}
         </div>
 
         <header className="hidden md:flex bg-card border-b border-border px-8 py-4 justify-between items-center sticky top-0 z-10">
            <h2 className="text-lg font-medium shrink-0">
+              {activeFilter === 'recommended' && '发现应用'}
               {activeFilter === 'all' && '全部应用'}
               {activeFilter === 'installed' && '已安装应用'}
               {activeFilter === 'update_available' && '可用更新'}
-              {activeCategory && (
+              {activeFilter !== 'recommended' && activeCategory && (
                 <span className="text-muted-foreground font-normal">{' · '}{CATEGORIES.find(c => c.key === activeCategory)?.label}</span>
               )}
            </h2>
            <div className="flex items-center gap-3">
-               <div className="relative">
-                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                 <Input
-                   type="text"
-                   placeholder="搜索应用..."
-                   value={searchQuery}
-                   onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-56 pl-8 pr-8 h-9 shadow-none"
-                 />
-                 {searchQuery && (
-                   <button
-                     onClick={() => setSearchQuery('')}
-                     className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                   >
-                     <X className="h-4 w-4" />
-                   </button>
-                 )}
-               </div>
-               <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
-                 <SelectTrigger className="w-32 h-9 shadow-none">
-                   <ArrowUpDown className="h-3.5 w-3.5 mr-1.5" />
-                   <SelectValue />
-                 </SelectTrigger>
-                 <SelectContent>
-                   <SelectItem value="default">默认</SelectItem>
-                   <SelectItem value="downloads">下载量</SelectItem>
-                   <SelectItem value="name">名称</SelectItem>
-                   <SelectItem value="updated">最近更新</SelectItem>
-                 </SelectContent>
-               </Select>
+               {activeFilter !== 'recommended' && (
+                 <>
+                   <div className="relative">
+                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                     <Input
+                       type="text"
+                       placeholder="搜索应用..."
+                       value={searchQuery}
+                       onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-56 pl-8 pr-8 h-9 shadow-none"
+                     />
+                     {searchQuery && (
+                       <button
+                         onClick={() => setSearchQuery('')}
+                         className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                       >
+                         <X className="h-4 w-4" />
+                       </button>
+                     )}
+                   </div>
+                   <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
+                     <SelectTrigger className="w-32 h-9 shadow-none">
+                       <ArrowUpDown className="h-3.5 w-3.5 mr-1.5" />
+                       <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent>
+                       <SelectItem value="default">默认</SelectItem>
+                       <SelectItem value="downloads">下载量</SelectItem>
+                       <SelectItem value="name">名称</SelectItem>
+                       <SelectItem value="updated">最近更新</SelectItem>
+                     </SelectContent>
+                   </Select>
+                 </>
+               )}
                <Button 
                  onClick={handleCheck} 
                  disabled={checking}
@@ -854,7 +898,21 @@ const App: React.FC = () => {
         </header>
 
         <main className="flex-grow p-4 md:p-8 overflow-y-auto">
-          {loadStatus === 'loaded' ? (
+          {activeFilter === 'recommended' ? (
+            recommendedApps.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {recommendedApps.map(app => (
+                  <RecommendedAppCard key={app.name} app={app} />
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-64">
+                <Compass className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <p className="text-muted-foreground font-medium">暂无推荐应用</p>
+                <p className="text-sm text-muted-foreground mt-1">请稍后再来看看</p>
+              </div>
+            )
+          ) : loadStatus === 'loaded' ? (
             <AppList
                apps={filteredApps}
                loading={false}
