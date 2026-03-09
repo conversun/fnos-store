@@ -10,8 +10,10 @@ type InstalledApp struct {
 
 // VolumeInfo represents an available installation volume.
 type VolumeInfo struct {
-	Index int
-	Path  string
+	Index      int
+	Path       string
+	TotalBytes uint64
+	FreeBytes  uint64
 }
 
 // AppCenter abstracts appcenter-cli operations.

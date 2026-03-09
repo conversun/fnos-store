@@ -120,6 +120,7 @@ func (a *LinuxAppCenter) ListVolumes() ([]VolumeInfo, error) {
 		return nil, err
 	}
 
+	seen := make(map[int]bool)
 	var volumes []VolumeInfo
 	for _, m := range matches {
 		info, err := os.Stat(m)
@@ -134,7 +135,20 @@ func (a *LinuxAppCenter) ListVolumes() ([]VolumeInfo, error) {
 		if err != nil {
 			continue
 		}
-		volumes = append(volumes, VolumeInfo{Index: idx, Path: m})
+		// Deduplicate by index: /vol1 and /vol01 both parse to index 1.
+		// Keep the first (shortest path) encountered per index.
+		if seen[idx] {
+			continue
+		}
+		seen[idx] = true
+
+		vol := VolumeInfo{Index: idx, Path: m}
+		var stat syscall.Statfs_t
+		if err := syscall.Statfs(m, &stat); err == nil {
+			vol.TotalBytes = stat.Blocks * uint64(stat.Bsize)
+			vol.FreeBytes = stat.Bavail * uint64(stat.Bsize)
+		}
+		volumes = append(volumes, vol)
 	}
 
 	sort.Slice(volumes, func(i, j int) bool {

@@ -15,8 +15,10 @@ type mirrorOptionResponse struct {
 }
 
 type volumeOptionResponse struct {
-	Index int    `json:"index"`
-	Path  string `json:"path"`
+	Index      int    `json:"index"`
+	Path       string `json:"path"`
+	TotalBytes uint64 `json:"total_bytes"`
+	FreeBytes  uint64 `json:"free_bytes"`
 }
 
 type settingsResponse struct {
@@ -70,7 +72,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	if volumes, err := s.ac.ListVolumes(); err == nil {
 		volOpts = make([]volumeOptionResponse, len(volumes))
 		for i, v := range volumes {
-			volOpts[i] = volumeOptionResponse{Index: v.Index, Path: v.Path}
+			volOpts[i] = volumeOptionResponse{Index: v.Index, Path: v.Path, TotalBytes: v.TotalBytes, FreeBytes: v.FreeBytes}
 		}
 	}
 
@@ -134,7 +136,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	if volumes, err := s.ac.ListVolumes(); err == nil {
 		volOpts = make([]volumeOptionResponse, len(volumes))
 		for i, v := range volumes {
-			volOpts[i] = volumeOptionResponse{Index: v.Index, Path: v.Path}
+			volOpts[i] = volumeOptionResponse{Index: v.Index, Path: v.Path, TotalBytes: v.TotalBytes, FreeBytes: v.FreeBytes}
 		}
 	}
 

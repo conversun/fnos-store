@@ -105,7 +105,7 @@ func (m *MockAppCenter) DefaultVolume() (int, error) {
 
 func (m *MockAppCenter) ListVolumes() ([]VolumeInfo, error) {
 	return []VolumeInfo{
-		{Index: 1, Path: "/vol1"},
-		{Index: 2, Path: "/vol2"},
+		{Index: 1, Path: "/vol1", TotalBytes: 1000204886016, FreeBytes: 536870912000},
+		{Index: 2, Path: "/vol2", TotalBytes: 2000398934016, FreeBytes: 1503238553600},
 	}, nil
 }
