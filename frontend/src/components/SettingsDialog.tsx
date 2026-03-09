@@ -29,6 +29,14 @@ interface SettingsDialogProps {
   onStoreUpdate?: () => void;
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes <= 0) return '';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  const val = bytes / Math.pow(1024, i);
+  return `${val >= 100 ? Math.round(val) : val.toFixed(1)} ${units[i]}`;
+}
+
 function latencyColor(result: MirrorCheckResult): string {
   if (result.status !== 'ok') return 'text-muted-foreground';
   if (result.latency_ms <= 300) return 'text-green-600';
@@ -232,7 +240,14 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     <SelectItem value="0">系统默认</SelectItem>
                     {volumeOptions.map((vol) => (
                       <SelectItem key={vol.index} value={vol.index.toString()}>
-                        硬盘 {vol.index} ({vol.path})
+                        <span className="flex items-center gap-2">
+                          <span>硬盘 {vol.index}</span>
+                          {vol.total_bytes > 0 && (
+                            <span className="text-xs text-muted-foreground">
+                              {formatBytes(vol.free_bytes)} 可用 / {formatBytes(vol.total_bytes)}
+                            </span>
+                          )}
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>

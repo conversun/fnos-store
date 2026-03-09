@@ -31,7 +31,6 @@ export interface RecommendedApp {
   name: string;
   display_name: string;
   description: string;
-  icon_url: string;
   source_url: string;
   github_repo?: string;
   latest_version?: string;
@@ -175,6 +174,8 @@ export interface MirrorOption {
 export interface VolumeOption {
   index: number;
   path: string;
+  total_bytes: number;
+  free_bytes: number;
 }
 
 export interface Settings {
