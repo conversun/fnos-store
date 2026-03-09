@@ -17,17 +17,9 @@ const RecommendedAppCard: React.FC<RecommendedAppCardProps> = ({ app }) => {
       <div className="p-4 flex flex-col h-full gap-3">
         <div className="flex items-start gap-3">
           <div className="shrink-0">
-            {app.icon_url ? (
-              <img
-                src={app.icon_url}
-                alt={app.display_name}
-                className="w-11 h-11 rounded-xl object-cover bg-background"
-              />
-            ) : (
-              <div className="w-11 h-11 bg-muted/60 rounded-xl flex items-center justify-center text-muted-foreground">
-                <Package className="h-5 w-5 opacity-40" />
-              </div>
-            )}
+            <div className="w-11 h-11 bg-muted/60 rounded-xl flex items-center justify-center text-muted-foreground">
+              <Package className="h-5 w-5 opacity-40" />
+            </div>
           </div>
 
           <div className="flex-1 min-w-0 flex flex-col gap-0.5">

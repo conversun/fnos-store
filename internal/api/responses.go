@@ -33,7 +33,6 @@ type recommendedAppResponse struct {
 	Name          string `json:"name"`
 	DisplayName   string `json:"display_name"`
 	Description   string `json:"description"`
-	IconURL       string `json:"icon_url"`
 	SourceURL     string `json:"source_url"`
 	GitHubRepo    string `json:"github_repo,omitempty"`
 	LatestVersion string `json:"latest_version,omitempty"`

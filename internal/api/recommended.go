@@ -10,7 +10,6 @@ func (s *Server) handleListRecommended(w http.ResponseWriter, r *http.Request) {
 			Name:          app.Name,
 			DisplayName:   app.DisplayName,
 			Description:   app.Description,
-			IconURL:       app.IconURL,
 			SourceURL:     app.SourceURL,
 			GitHubRepo:    app.GitHubRepo,
 			LatestVersion: app.LatestVersion,

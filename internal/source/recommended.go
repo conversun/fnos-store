@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"fnos-store/internal/config"
@@ -21,7 +20,6 @@ type RecommendedApp struct {
 	Name          string `json:"name"`
 	DisplayName   string `json:"display_name"`
 	Description   string `json:"description"`
-	IconURL       string `json:"icon_url"`
 	SourceURL     string `json:"source_url"`
 	GitHubRepo    string `json:"github_repo"`
 	LatestVersion string `json:"latest_version"`
@@ -110,16 +108,7 @@ func (s *RecommendedSource) decodeRecommended(raw []byte) ([]RecommendedApp, err
 		return nil, fmt.Errorf("decode recommended.json: %w", err)
 	}
 
-	prefix := s.mirrorPrefix()
-	apps := make([]RecommendedApp, 0, len(payload.Apps))
-	for _, app := range payload.Apps {
-		if prefix != "" && strings.Contains(app.IconURL, "raw.githubusercontent.com") {
-			app.IconURL = prefix + app.IconURL
-		}
-		apps = append(apps, app)
-	}
-
-	return apps, nil
+	return payload.Apps, nil
 }
 
 func (s *RecommendedSource) writeCache(raw []byte) error {
@@ -174,13 +163,4 @@ func (s *RecommendedSource) readLocal() ([]RecommendedApp, error) {
 
 	_ = s.writeCache(raw)
 	return apps, nil
-}
-
-func (s *RecommendedSource) mirrorPrefix() string {
-	if s.configMgr == nil {
-		return config.GitHubMirrorPrefix(config.DefaultMirror, config.Config{})
-	}
-
-	cfg := s.configMgr.Get()
-	return config.GitHubMirrorPrefix(cfg.Mirror, cfg)
 }
