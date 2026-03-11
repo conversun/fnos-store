@@ -42,6 +42,11 @@ var gitHubMirrors = []GitHubMirror{
 var dockerMirrors = []DockerMirror{
 	{Key: "daocloud", Label: "DaoCloud", URL: "m.daocloud.io/", Description: "DaoCloud 公共 Docker 镜像加速"},
 	{Key: "docker-1ms", Label: "1ms.run", URL: "docker.1ms.run/", Description: "社区 Docker 镜像加速"},
+	{Key: "daocloud-docker", Label: "DaoCloud Docker", URL: "docker.m.daocloud.io/", Description: "DaoCloud Docker 镜像加速（全球可用）"},
+	{Key: "ratdev", Label: "Rat.Dev", URL: "hub.rat.dev/", Description: "Rat 社区 Docker 镜像加速"},
+	{Key: "1panel", Label: "1Panel", URL: "docker.1panel.live/", Description: "1Panel 官方 Docker 镜像加速（仅限国内）"},
+	{Key: "dockerproxy", Label: "DockerProxy", URL: "dockerproxy.net/", Description: "Docker Proxy 社区镜像加速（仅限国内）"},
+	{Key: "registry-cyou", Label: "Registry.cyou", URL: "registry.cyou/", Description: "Cloudflare Docker 镜像代理（仅限国内）"},
 	{Key: "custom", Label: "自定义", URL: "", Description: "使用自定义加速地址"},
 	{Key: "direct", Label: "直连 Docker Hub", URL: "", Description: "直接拉取，适合有代理的用户"},
 }

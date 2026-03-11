@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu, ChevronsLeft, ChevronsRight, Search, X, Film, ArrowDownToLine, BookOpen, Wrench, Globe, LayoutList, ArrowUpDown, Loader2, CircleX, CircleCheck, WifiOff, ExternalLink, Package, Compass } from 'lucide-react';
+import { LayoutGrid, CheckCircle2, RefreshCw, Settings, MessageCircle, Menu, ChevronsLeft, ChevronsRight, Search, X, Film, ArrowDownToLine, BookOpen, Wrench, Globe, LayoutList, ArrowUpDown, Loader2, CircleX, CircleCheck, WifiOff, ExternalLink, Package, Compass, Brain, Clapperboard, Network } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { Badge } from './components/ui/badge';
@@ -41,8 +41,11 @@ import {
 
 const CATEGORIES = [
   { key: 'media', label: '媒体服务', icon: Film },
+  { key: 'automation', label: '媒体自动化', icon: Clapperboard },
   { key: 'download', label: '下载传输', icon: ArrowDownToLine },
   { key: 'content', label: '内容管理', icon: BookOpen },
+  { key: 'ai', label: 'AI', icon: Brain },
+  { key: 'network', label: '网络工具', icon: Network },
   { key: 'system', label: '系统工具', icon: Wrench },
   { key: 'browser', label: '浏览器', icon: Globe },
 ] as const;
