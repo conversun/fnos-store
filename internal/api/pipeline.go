@@ -237,6 +237,7 @@ func (p *installPipeline) dockerPull(ctx context.Context, stream *sseStream, fpk
 	}
 
 	var totalLayers, completedLayers int
+	var lastErrLine string
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -246,8 +247,14 @@ func (p *installPipeline) dockerPull(ctx context.Context, stream *sseStream, fpk
 		case strings.Contains(line, "Already exists"):
 			totalLayers++
 			completedLayers++
-		case strings.Contains(line, "Pull complete"):
+		case strings.Contains(line, "Pull complete"), strings.Contains(line, "Digest:"),
+			strings.Contains(line, "Status:"), strings.Contains(line, "Downloading"),
+			strings.Contains(line, "Extracting"), strings.Contains(line, "Verifying"):
 			completedLayers++
+		default:
+			if trimmed := strings.TrimSpace(line); trimmed != "" {
+				lastErrLine = trimmed
+			}
 		}
 		if totalLayers > 0 {
 			pct := completedLayers * 100 / totalLayers
@@ -259,7 +266,11 @@ func (p *installPipeline) dockerPull(ctx context.Context, stream *sseStream, fpk
 	}
 
 	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("Docker 镜像拉取失败: %w", err)
+		detail := err.Error()
+		if lastErrLine != "" {
+			detail = lastErrLine
+		}
+		return fmt.Errorf("Docker 镜像拉取失败: %s\n请尝试在 Docker 设置中更换镜像加速源后重试", detail)
 	}
 
 	_ = stream.sendProgress(progressPayload{Step: "pulling", Progress: 100, Message: "Docker 镜像拉取完成"})
@@ -281,9 +292,6 @@ func parseDockerImage(content string, app core.AppInfo) string {
 		image = strings.ReplaceAll(image, "${DOCKER_MIRROR}", mirror)
 
 		version := app.FpkVersion
-		if version == "" {
-			version = app.LatestVersion
-		}
 		image = strings.ReplaceAll(image, "${VERSION}", version)
 
 		return image
