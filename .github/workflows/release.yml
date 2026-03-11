@@ -39,10 +39,19 @@ jobs:
 
       - name: Create Release
         run: |
-          gh release create "${{ github.ref_name }}" \
-            --title "fnos-store ${{ github.ref_name }}" \
-            --generate-notes \
-            store-server-linux-amd64 \
-            store-server-linux-arm64
+          TAG="${{ github.ref_name }}"
+          if gh release view "$TAG" &>/dev/null; then
+            echo "Release $TAG exists, uploading assets..."
+            gh release upload "$TAG" \
+              store-server-linux-amd64 \
+              store-server-linux-arm64 \
+              --clobber
+          else
+            gh release create "$TAG" \
+              --title "fnos-store $TAG" \
+              --generate-notes \
+              store-server-linux-amd64 \
+              store-server-linux-arm64
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
