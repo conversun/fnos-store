@@ -40,11 +40,11 @@ import {
 } from "@/components/ui/alert-dialog"
 
 const CATEGORIES = [
+  { key: 'ai', label: 'AI', icon: Brain },
   { key: 'media', label: '媒体服务', icon: Film },
   { key: 'automation', label: '媒体自动化', icon: Clapperboard },
   { key: 'download', label: '下载传输', icon: ArrowDownToLine },
   { key: 'content', label: '内容管理', icon: BookOpen },
-  { key: 'ai', label: 'AI', icon: Brain },
   { key: 'network', label: '网络工具', icon: Network },
   { key: 'system', label: '系统工具', icon: Wrench },
   { key: 'browser', label: '浏览器', icon: Globe },
