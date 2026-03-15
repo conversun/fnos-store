@@ -78,7 +78,7 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
               <img
                 src={app.icon_url}
                 alt={app.display_name}
-                className="w-11 h-11 rounded-xl object-cover bg-background"
+                className="w-11 h-11 rounded-xl object-cover bg-background dark:bg-muted/60 dark:ring-1 dark:ring-border/50"
               />
             ) : (
               <div className="w-11 h-11 bg-muted/60 rounded-xl flex items-center justify-center text-muted-foreground">

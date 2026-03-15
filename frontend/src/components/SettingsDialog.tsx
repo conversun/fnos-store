@@ -193,8 +193,8 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
   return (
     <Dialog open={visible} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
+        <DialogHeader className="shrink-0">
           <DialogTitle>设置</DialogTitle>
         </DialogHeader>
         
@@ -203,7 +203,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="space-y-6 py-4">
+          <div className="space-y-6 py-4 overflow-y-auto flex-1 min-h-0">
             <div className="space-y-2">
               <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                 自动检查更新间隔
@@ -416,7 +416,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
           </div>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <Button variant="outline" onClick={onClose} disabled={saving}>
             取消
           </Button>

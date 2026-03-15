@@ -75,6 +75,7 @@ const App: React.FC = () => {
   const [detailApp, setDetailApp] = useState<AppInfo | null>(null);
   const [successInfo, setSuccessInfo] = useState<{app: AppInfo; operation: 'install' | 'update'} | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>('default');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() =>
     localStorage.getItem('sidebar-collapsed') === 'true'
   );
@@ -681,28 +682,29 @@ const App: React.FC = () => {
         </TooltipProvider>
        </aside>
 
-      <div className="flex-1 flex flex-col min-h-screen">
+      <div className="flex-1 flex flex-col min-h-0 md:min-h-screen">
         <div className="md:hidden bg-card border-b border-border p-4 sticky top-0 z-20 flex flex-col gap-3">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <Sheet>
+                    <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                         <SheetTrigger asChild>
                             <Button variant="ghost" size="icon">
                                 <Menu className="h-5 w-5" />
                             </Button>
                         </SheetTrigger>
-                        <SheetContent side="left" className="w-64 p-0">
-                             <div className="p-6 border-b border-border">
+                        <SheetContent side="left" className="w-64 p-0 flex flex-col h-full">
+                             <div className="p-6 border-b border-border shrink-0">
                                 <h1 className="text-xl font-semibold tracking-tight">fnOS Apps</h1>
                                 <p className="text-sm text-muted-foreground mt-1.5">
                                    上次检查: {lastCheck ? new Date(lastCheck).toLocaleString() : '从未'}
                                 </p>
                              </div>
-                             <nav className="flex-1 p-4 space-y-1">
+                             <div className="flex-1 overflow-y-auto min-h-0">
+                              <nav className="p-4 space-y-1">
                                  <Button
                                    variant={activeFilter === 'recommended' ? 'secondary' : 'ghost'}
                                    className="w-full justify-start h-10 px-3 shadow-none text-blue-600 hover:text-blue-700 dark:text-blue-500 dark:hover:text-blue-400"
-                                   onClick={() => { setActiveFilter('recommended'); setActiveCategory(null); }}
+                                   onClick={() => { setActiveFilter('recommended'); setActiveCategory(null); setMobileMenuOpen(false); }}
                                  >
                                     <Compass className="mr-3 h-4 w-4 shrink-0" />
                                     <span className="flex-1 text-left">发现</span>
@@ -711,7 +713,7 @@ const App: React.FC = () => {
                                  <Button
                                    variant={activeFilter === 'all' ? 'secondary' : 'ghost'}
                                    className="w-full justify-start h-10 px-3 shadow-none"
-                                   onClick={() => setActiveFilter('all')}
+                                   onClick={() => { setActiveFilter('all'); setMobileMenuOpen(false); }}
                                  >
                                     <LayoutGrid className="mr-3 h-4 w-4 shrink-0" />
                                     <span className="flex-1 text-left">全部</span>
@@ -720,7 +722,7 @@ const App: React.FC = () => {
                                  <Button
                                    variant={activeFilter === 'installed' ? 'secondary' : 'ghost'}
                                    className="w-full justify-start h-10 px-3 shadow-none"
-                                   onClick={() => setActiveFilter('installed')}
+                                   onClick={() => { setActiveFilter('installed'); setMobileMenuOpen(false); }}
                                  >
                                     <CheckCircle2 className="mr-3 h-4 w-4 shrink-0" />
                                     <span className="flex-1 text-left">已安装</span>
@@ -729,7 +731,7 @@ const App: React.FC = () => {
                                  <Button
                                    variant={activeFilter === 'update_available' ? 'secondary' : 'ghost'}
                                    className="w-full justify-start h-10 px-3 shadow-none"
-                                   onClick={() => setActiveFilter('update_available')}
+                                   onClick={() => { setActiveFilter('update_available'); setMobileMenuOpen(false); }}
                                  >
                                     <RefreshCw className="mr-3 h-4 w-4 shrink-0" />
                                     <span className="flex-1 text-left">有更新</span>
@@ -741,13 +743,13 @@ const App: React.FC = () => {
                                  </Button>
                               </nav>
                               {activeFilter !== 'recommended' && (
-                                <div className="px-4 pt-3 border-t border-border">
+                                <div className="px-4 pt-3 border-t border-border pb-4">
                                   <p className="text-xs font-medium text-muted-foreground mb-2 px-3">分类</p>
                                   <div className="space-y-1">
                                     <Button
                                       variant={activeCategory === null ? 'secondary' : 'ghost'}
                                       className="w-full justify-start h-10 px-3 shadow-none"
-                                      onClick={() => setActiveCategory(null)}
+                                      onClick={() => { setActiveCategory(null); setMobileMenuOpen(false); }}
                                     >
                                       <LayoutList className="mr-3 h-4 w-4 shrink-0" />
                                       <span className="flex-1 text-left">全部</span>
@@ -761,7 +763,7 @@ const App: React.FC = () => {
                                           key={cat.key}
                                           variant={isActive ? 'secondary' : 'ghost'}
                                           className="w-full justify-start h-10 px-3 shadow-none"
-                                          onClick={() => setActiveCategory(cat.key)}
+                                          onClick={() => { setActiveCategory(cat.key); setMobileMenuOpen(false); }}
                                         >
                                           <Icon className="mr-3 h-4 w-4 shrink-0" />
                                           <span className="flex-1 text-left">{cat.label}</span>
@@ -772,7 +774,8 @@ const App: React.FC = () => {
                                   </div>
                                 </div>
                               )}
-                              <div className="p-4 mt-auto border-t border-border space-y-1">
+                             </div>
+                              <div className="p-4 border-t border-border space-y-1 shrink-0">
                                  <Button
                                    variant="ghost"
                                    className="w-full justify-start h-10 px-3 shadow-none text-muted-foreground hover:text-foreground"
@@ -784,7 +787,7 @@ const App: React.FC = () => {
                                  <Button
                                    variant="ghost"
                                    className="w-full justify-start h-10 px-3 shadow-none text-muted-foreground hover:text-foreground"
-                                   onClick={() => setSettingsVisible(true)}
+                                   onClick={() => { setSettingsVisible(true); setMobileMenuOpen(false); }}
                                  >
                                     <div className="relative shrink-0 mr-3">
                                       <Settings className="h-4 w-4" />
@@ -1034,7 +1037,7 @@ const App: React.FC = () => {
                   <img
                     src={successInfo.app.icon_url}
                     alt={successInfo.app.display_name}
-                    className="w-12 h-12 rounded-xl object-cover bg-background shrink-0"
+                    className="w-12 h-12 rounded-xl object-cover bg-background dark:bg-muted/60 dark:ring-1 dark:ring-border/50 shrink-0"
                   />
                 ) : (
                   <div className="w-12 h-12 bg-muted/60 rounded-xl flex items-center justify-center text-muted-foreground shrink-0">

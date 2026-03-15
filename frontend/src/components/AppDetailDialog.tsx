@@ -92,7 +92,7 @@ const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChan
               <img
                 src={app.icon_url}
                 alt={app.display_name}
-                className="w-12 h-12 rounded-xl object-cover bg-background shrink-0"
+                className="w-12 h-12 rounded-xl object-cover bg-background dark:bg-muted/60 dark:ring-1 dark:ring-border/50 shrink-0"
               />
             ) : (
               <div className="w-12 h-12 bg-muted/60 rounded-xl flex items-center justify-center text-muted-foreground shrink-0">
