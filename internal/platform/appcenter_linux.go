@@ -114,11 +114,33 @@ func (a *LinuxAppCenter) DefaultVolume() (int, error) {
 	return strconv.Atoi(out)
 }
 
+// isMountPoint returns true if path is a mount point (its device differs
+// from the parent directory's device). This filters out plain directories
+// like /vol00 or /vol02 that sit on the root partition and are not real
+// storage volumes.
+func isMountPoint(path string) bool {
+	var pathStat, parentStat syscall.Stat_t
+	if err := syscall.Stat(path, &pathStat); err != nil {
+		return false
+	}
+	if err := syscall.Stat(filepath.Dir(path), &parentStat); err != nil {
+		return false
+	}
+	return pathStat.Dev != parentStat.Dev
+}
+
 func (a *LinuxAppCenter) ListVolumes() ([]VolumeInfo, error) {
 	matches, err := filepath.Glob("/vol*")
 	if err != nil {
 		return nil, err
 	}
+
+	sort.Slice(matches, func(i, j int) bool {
+		if len(matches[i]) != len(matches[j]) {
+			return len(matches[i]) < len(matches[j])
+		}
+		return matches[i] < matches[j]
+	})
 
 	seen := make(map[int]bool)
 	var volumes []VolumeInfo
@@ -135,8 +157,9 @@ func (a *LinuxAppCenter) ListVolumes() ([]VolumeInfo, error) {
 		if err != nil {
 			continue
 		}
-		// Deduplicate by index: /vol1 and /vol01 both parse to index 1.
-		// Keep the first (shortest path) encountered per index.
+		if !isMountPoint(m) {
+			continue
+		}
 		if seen[idx] {
 			continue
 		}

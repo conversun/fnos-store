@@ -227,21 +227,21 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
             {volumeOptions.length > 0 && (
               <div className="space-y-2">
                 <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                  应用安装硬盘
+                  应用安装位置
                 </label>
                 <Select
                   value={installVolume.toString()}
                   onValueChange={(value) => setInstallVolume(Number(value))}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="选择安装硬盘" />
+                    <SelectValue placeholder="选择存储空间" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="0">系统默认</SelectItem>
                     {volumeOptions.map((vol) => (
                       <SelectItem key={vol.index} value={vol.index.toString()}>
                         <span className="flex items-center gap-2">
-                          <span>硬盘 {vol.index}</span>
+                          <span>存储空间 {vol.index}</span>
                           {vol.total_bytes > 0 && (
                             <span className="text-xs text-muted-foreground">
                               {formatBytes(vol.free_bytes)} 可用 / {formatBytes(vol.total_bytes)}
@@ -253,7 +253,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  选择应用安装到哪个硬盘，默认使用系统指定的硬盘
+                  选择应用安装到哪个存储空间，默认使用系统指定的存储空间
                 </p>
               </div>
             )}
