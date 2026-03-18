@@ -25,6 +25,7 @@ type FNOSAppsSource struct {
 	httpClient *http.Client
 	appsURL    string
 	cachePath  string
+	localPath  string
 	platform   string
 	name       string
 	configMgr  *config.Manager
@@ -53,11 +54,12 @@ type appsJSONEntry struct {
 	PostInstallNote string   `json:"post_install_note,omitempty"`
 }
 
-func NewFNOSAppsSource(cachePath string, cfgMgr *config.Manager) *FNOSAppsSource {
+func NewFNOSAppsSource(cachePath, localPath string, cfgMgr *config.Manager) *FNOSAppsSource {
 	return &FNOSAppsSource{
 		httpClient: &http.Client{Timeout: 20 * time.Second},
 		appsURL:    defaultAppsJSONURL,
 		cachePath:  cachePath,
+		localPath:  localPath,
 		platform:   platform.DetectPlatform(),
 		name:       "fnos-apps",
 		configMgr:  cfgMgr,
@@ -102,6 +104,10 @@ func (s *FNOSAppsSource) FetchAppsWithProgress(ctx context.Context, onProgress P
 	cached, cacheErr := s.readCache()
 	if cacheErr == nil {
 		return cached, nil
+	}
+
+	if local, localErr := s.readLocal(); localErr == nil {
+		return local, nil
 	}
 
 	return nil, fmt.Errorf("fetch apps from remote failed: %w", err)
@@ -279,5 +285,24 @@ func (s *FNOSAppsSource) readCache() ([]RemoteApp, error) {
 		return nil, fmt.Errorf("decode cached apps: %w", err)
 	}
 
+	return apps, nil
+}
+
+func (s *FNOSAppsSource) readLocal() ([]RemoteApp, error) {
+	if s.localPath == "" {
+		return nil, errors.New("local path is empty")
+	}
+
+	raw, err := os.ReadFile(s.localPath)
+	if err != nil {
+		return nil, fmt.Errorf("read local apps %q: %w", s.localPath, err)
+	}
+
+	apps, err := s.decodeApps(raw)
+	if err != nil {
+		return nil, fmt.Errorf("decode local apps %q: %w", s.localPath, err)
+	}
+
+	_ = s.writeCache(raw)
 	return apps, nil
 }

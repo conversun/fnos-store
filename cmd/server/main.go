@@ -42,7 +42,11 @@ func main() {
 	cacheStore.CleanupStaleFiles()
 
 	ac := platform.NewAppCenter(projectRoot)
-	src := source.NewFNOSAppsSource(cachePath, cfgMgr)
+	src := source.NewFNOSAppsSource(
+		cachePath,
+		filepath.Join(projectRoot, "..", "fnos-apps", "apps.json"),
+		cfgMgr,
+	)
 	recommendedSrc := source.NewRecommendedSource(
 		filepath.Join(dataDir, "cache", "recommended.json"),
 		filepath.Join(projectRoot, "..", "fnos-apps", "recommended.json"),

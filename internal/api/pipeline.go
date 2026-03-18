@@ -204,36 +204,56 @@ func (p *installPipeline) dockerPull(ctx context.Context, stream *sseStream, fpk
 	appTgz := filepath.Join(fpkDir, "app.tgz")
 	appDir := filepath.Join(fpkDir, "app-contents")
 	if err := os.MkdirAll(appDir, 0o755); err != nil {
-		return nil
+		fmt.Fprintf(os.Stderr, "dockerPull: create app dir: %v\n", err)
+		return nil // non-fatal: let install handle it
 	}
 	if out, err := exec.CommandContext(ctx, "tar", "xzf", appTgz, "-C", appDir).CombinedOutput(); err != nil {
-		fmt.Fprintf(os.Stderr, "extract app.tgz: %v: %s\n", err, out)
-		return nil
+		fmt.Fprintf(os.Stderr, "dockerPull: extract app.tgz: %v: %s\n", err, out)
+		return nil // non-fatal: let install handle it
 	}
 
 	composePath := filepath.Join(appDir, "docker", "docker-compose.yaml")
 	data, err := os.ReadFile(composePath)
 	if err != nil {
+		return nil // no compose file — not a docker app
+	}
+
+	images := parseDockerImages(string(data), app)
+	if len(images) == 0 {
+		return nil // no images found — not a docker app
+	}
+
+	if _, err := exec.LookPath("docker"); err != nil {
+		fmt.Fprintf(os.Stderr, "dockerPull: docker not found, skipping pre-pull\n")
 		return nil
 	}
 
-	image := parseDockerImage(string(data), app)
-	if image == "" {
-		return nil
+	for i, image := range images {
+		msg := fmt.Sprintf("正在拉取 Docker 镜像 (%d/%d)...", i+1, len(images))
+		if len(images) == 1 {
+			msg = "正在拉取 Docker 镜像..."
+		}
+		_ = stream.sendProgress(progressPayload{Step: "pulling", Progress: 0, Message: msg})
+
+		if err := p.pullSingleImage(ctx, stream, image, msg); err != nil {
+			return err
+		}
 	}
 
-	_ = stream.sendProgress(progressPayload{Step: "pulling", Progress: 0, Message: "正在拉取 Docker 镜像..."})
+	_ = stream.sendProgress(progressPayload{Step: "pulling", Progress: 100, Message: "Docker 镜像拉取完成"})
+	return nil
+}
 
+func (p *installPipeline) pullSingleImage(ctx context.Context, stream *sseStream, image, message string) error {
 	cmd := exec.CommandContext(ctx, "docker", "pull", image)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil
+		return fmt.Errorf("Docker 镜像拉取失败: %w", err)
 	}
 	cmd.Stderr = cmd.Stdout
 
 	if err := cmd.Start(); err != nil {
-		// docker not available — skip, let install-local handle it
-		return nil
+		return fmt.Errorf("Docker 镜像拉取失败: %w", err)
 	}
 
 	var totalLayers, completedLayers int
@@ -261,7 +281,7 @@ func (p *installPipeline) dockerPull(ctx context.Context, stream *sseStream, fpk
 			if pct > 99 {
 				pct = 99
 			}
-			_ = stream.sendProgress(progressPayload{Step: "pulling", Progress: pct, Message: "正在拉取 Docker 镜像..."})
+			_ = stream.sendProgress(progressPayload{Step: "pulling", Progress: pct, Message: message})
 		}
 	}
 
@@ -273,11 +293,14 @@ func (p *installPipeline) dockerPull(ctx context.Context, stream *sseStream, fpk
 		return fmt.Errorf("Docker 镜像拉取失败: %s\n请尝试在 Docker 设置中更换镜像加速源后重试", detail)
 	}
 
-	_ = stream.sendProgress(progressPayload{Step: "pulling", Progress: 100, Message: "Docker 镜像拉取完成"})
 	return nil
 }
 
-func parseDockerImage(content string, app core.AppInfo) string {
+func parseDockerImages(content string, app core.AppInfo) []string {
+	mirror := os.Getenv("DOCKER_MIRROR")
+	version := app.FpkVersion
+
+	var images []string
 	for _, line := range strings.Split(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if !strings.HasPrefix(trimmed, "image:") {
@@ -288,15 +311,12 @@ func parseDockerImage(content string, app core.AppInfo) string {
 			continue
 		}
 
-		mirror := os.Getenv("DOCKER_MIRROR")
 		image = strings.ReplaceAll(image, "${DOCKER_MIRROR}", mirror)
-
-		version := app.FpkVersion
 		image = strings.ReplaceAll(image, "${VERSION}", version)
 
-		return image
+		images = append(images, image)
 	}
-	return ""
+	return images
 }
 
 func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, opName string, app core.AppInfo, refreshFn func(context.Context) error) {

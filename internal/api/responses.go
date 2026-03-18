@@ -66,6 +66,13 @@ type storeUpdateResponse struct {
 	HasUpdate        bool   `json:"has_update"`
 }
 
+type appLogsResponse struct {
+	AppName    string   `json:"appname"`
+	LogLines   []string `json:"log_lines"`
+	Source     string   `json:"source"`
+	Containers []string `json:"containers,omitempty"`
+}
+
 type errorResponse struct {
 	Error string `json:"error"`
 }
