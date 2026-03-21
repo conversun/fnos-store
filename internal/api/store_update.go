@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"path/filepath"
 
 	"fnos-store/internal/core"
 )
@@ -55,6 +56,14 @@ func (s *Server) storeVersion() string {
 	app, ok := s.getRegistryApp(s.storeApp)
 	if ok && app.InstalledVersion != "" {
 		return app.InstalledVersion
+	}
+
+	// Fallback: read version directly from local manifest
+	if s.appsDir != "" && s.storeApp != "" {
+		manifestPath := filepath.Join(s.appsDir, s.storeApp, "manifest")
+		if m, err := core.ParseManifest(manifestPath); err == nil && m.Version != "" {
+			return m.Version
+		}
 	}
 	return ""
 }

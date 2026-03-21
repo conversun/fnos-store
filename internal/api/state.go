@@ -22,15 +22,12 @@ func (s *Server) refreshRegistry(ctx context.Context) error {
 		return errors.New("source/registry not configured")
 	}
 
-	remoteApps, err := s.source.FetchApps(ctx)
-	if err != nil {
-		return err
-	}
-
 	localApps, err := core.ScanInstalled(s.appsDir)
 	if err != nil {
 		return err
 	}
+
+	remoteApps, fetchErr := s.source.FetchApps(ctx)
 
 	var installedTags map[string]string
 	if s.cacheStore != nil {
@@ -52,7 +49,7 @@ func (s *Server) refreshRegistry(ctx context.Context) error {
 	}
 
 	s.refreshRuntimeStatus()
-	return nil
+	return fetchErr
 }
 
 func (s *Server) RefreshRegistry(ctx context.Context) error {

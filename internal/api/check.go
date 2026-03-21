@@ -7,12 +7,14 @@ import (
 )
 
 func (s *Server) handleCheck(w http.ResponseWriter, r *http.Request) {
-	if err := s.refreshRegistry(r.Context()); err != nil {
-		writeAPIError(w, http.StatusBadGateway, err.Error())
+	fetchErr := s.refreshRegistry(r.Context())
+
+	apps := s.listRegistryApps()
+	if fetchErr != nil && len(apps) == 0 {
+		writeAPIError(w, http.StatusBadGateway, fetchErr.Error())
 		return
 	}
 
-	apps := s.listRegistryApps()
 	cfg := s.configMgr.Get()
 	updates := 0
 	for _, app := range apps {
@@ -21,11 +23,17 @@ func (s *Server) handleCheck(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, checkResponse{
-		Status:           "ok",
+	resp := checkResponse{
 		Checked:          len(apps),
 		UpdatesAvailable: updates,
-	})
+	}
+	if fetchErr != nil {
+		resp.Status = "partial"
+	} else {
+		resp.Status = "ok"
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
