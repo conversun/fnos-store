@@ -218,7 +218,13 @@ func (p *installPipeline) dockerPull(ctx context.Context, stream *sseStream, fpk
 		return nil // no compose file — not a docker app
 	}
 
-	images := parseDockerImages(string(data), app)
+	mirror := os.Getenv("DOCKER_MIRROR")
+	var multiRegistry bool
+	if p.configMgr != nil {
+		multiRegistry = config.IsDockerMirrorMultiRegistry(p.configMgr.Get().DockerMirror)
+	}
+
+	images := parseDockerImages(string(data), app, mirror)
 	if len(images) == 0 {
 		return nil // no images found — not a docker app
 	}
@@ -228,15 +234,19 @@ func (p *installPipeline) dockerPull(ctx context.Context, stream *sseStream, fpk
 		return nil
 	}
 
-	for i, image := range images {
+	for i, composeRef := range images {
 		msg := fmt.Sprintf("正在拉取 Docker 镜像 (%d/%d)...", i+1, len(images))
 		if len(images) == 1 {
 			msg = "正在拉取 Docker 镜像..."
 		}
 		_ = stream.sendProgress(progressPayload{Step: "pulling", Progress: 0, Message: msg})
 
-		if err := p.pullSingleImage(ctx, stream, image, msg); err != nil {
+		pullRef := normalizeImageForPull(composeRef, mirror, multiRegistry)
+		if err := p.pullSingleImage(ctx, stream, pullRef, msg); err != nil {
 			return err
+		}
+		if pullRef != composeRef {
+			_ = exec.CommandContext(ctx, "docker", "tag", pullRef, composeRef).Run()
 		}
 	}
 
@@ -296,8 +306,7 @@ func (p *installPipeline) pullSingleImage(ctx context.Context, stream *sseStream
 	return nil
 }
 
-func parseDockerImages(content string, app core.AppInfo) []string {
-	mirror := os.Getenv("DOCKER_MIRROR")
+func parseDockerImages(content string, app core.AppInfo, mirror string) []string {
 	version := app.FpkVersion
 
 	var images []string
@@ -317,6 +326,27 @@ func parseDockerImages(content string, app core.AppInfo) []string {
 		images = append(images, image)
 	}
 	return images
+}
+
+func normalizeImageForPull(image, mirror string, multiRegistry bool) string {
+	if mirror == "" || multiRegistry {
+		return image
+	}
+	if !strings.HasPrefix(image, mirror) {
+		return image
+	}
+	afterMirror := image[len(mirror):]
+
+	if strings.HasPrefix(afterMirror, "docker.io/") {
+		return mirror + afterMirror[len("docker.io/"):]
+	}
+
+	idx := strings.IndexByte(afterMirror, '/')
+	if idx > 0 && strings.ContainsRune(afterMirror[:idx], '.') {
+		return afterMirror
+	}
+
+	return image
 }
 
 func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, opName string, app core.AppInfo, refreshFn func(context.Context) error) {

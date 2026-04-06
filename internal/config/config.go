@@ -22,10 +22,11 @@ type GitHubMirror struct {
 }
 
 type DockerMirror struct {
-	Key         string
-	Label       string
-	URL         string
-	Description string
+	Key           string
+	Label         string
+	URL           string
+	Description   string
+	MultiRegistry bool // supports proxying multiple registries (docker.io, ghcr.io, lscr.io, etc.)
 }
 
 var gitHubMirrors = []GitHubMirror{
@@ -40,7 +41,7 @@ var gitHubMirrors = []GitHubMirror{
 }
 
 var dockerMirrors = []DockerMirror{
-	{Key: "daocloud", Label: "DaoCloud", URL: "m.daocloud.io/", Description: "DaoCloud 公共 Docker 镜像加速"},
+	{Key: "daocloud", Label: "DaoCloud", URL: "m.daocloud.io/", Description: "DaoCloud 公共 Docker 镜像加速", MultiRegistry: true},
 	{Key: "docker-1ms", Label: "1ms.run", URL: "docker.1ms.run/", Description: "社区 Docker 镜像加速"},
 	{Key: "daocloud-docker", Label: "DaoCloud Docker", URL: "docker.m.daocloud.io/", Description: "DaoCloud Docker 镜像加速（全球可用）"},
 	{Key: "ratdev", Label: "Rat.Dev", URL: "hub.rat.dev/", Description: "Rat 社区 Docker 镜像加速"},
@@ -76,6 +77,18 @@ func DockerMirrorPrefix(key string, cfg Config) string {
 		}
 	}
 	return dockerMirrors[0].URL
+}
+
+func IsDockerMirrorMultiRegistry(key string) bool {
+	if key == "custom" || key == "direct" || key == "" {
+		return false
+	}
+	for _, m := range dockerMirrors {
+		if m.Key == key {
+			return m.MultiRegistry
+		}
+	}
+	return false
 }
 
 func GitHubFallbackPrefixes(selectedKey string, cfg Config) []string {
