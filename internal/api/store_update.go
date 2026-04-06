@@ -61,9 +61,14 @@ func (s *Server) storeVersion() string {
 	// Fallback: read version directly from local manifest
 	if s.appsDir != "" && s.storeApp != "" {
 		manifestPath := filepath.Join(s.appsDir, s.storeApp, "manifest")
-		if m, err := core.ParseManifest(manifestPath); err == nil && m.Version != "" {
-			return m.Version
+		if m, err := core.ParseManifest(manifestPath); err == nil {
+			if m.Version != "" {
+				return m.Version
+			}
+			if m.FpkVersion != "" {
+				return m.FpkVersion
+			}
 		}
 	}
-	return ""
+	return "dev"
 }

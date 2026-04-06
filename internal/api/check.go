@@ -24,13 +24,13 @@ func (s *Server) handleCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := checkResponse{
+		Status:           "ok",
 		Checked:          len(apps),
 		UpdatesAvailable: updates,
 	}
 	if fetchErr != nil {
 		resp.Status = "partial"
-	} else {
-		resp.Status = "ok"
+		resp.Warning = fetchErr.Error()
 	}
 
 	writeJSON(w, http.StatusOK, resp)

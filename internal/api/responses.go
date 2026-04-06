@@ -47,6 +47,7 @@ type checkResponse struct {
 	Status           string `json:"status"`
 	Checked          int    `json:"checked"`
 	UpdatesAvailable int    `json:"updates_available"`
+	Warning          string `json:"warning,omitempty"`
 }
 
 type statusResponse struct {

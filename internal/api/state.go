@@ -36,7 +36,10 @@ func (s *Server) refreshRegistry(ctx context.Context) error {
 
 	now := time.Now()
 	s.mu.Lock()
-	s.registry.Merge(localApps, remoteApps, installedTags)
+	// Preserve existing registry when all remote/cache/local fallbacks fail.
+	if remoteApps != nil || fetchErr == nil {
+		s.registry.Merge(localApps, remoteApps, installedTags)
+	}
 	s.lastCheck = now
 	s.mu.Unlock()
 
@@ -44,9 +47,7 @@ func (s *Server) refreshRegistry(ctx context.Context) error {
 		s.cacheStore.SetLastCheckAt(now)
 	}
 
-	if err := s.refreshRecommended(ctx); err != nil {
-		return err
-	}
+	_ = s.refreshRecommended(ctx)
 
 	s.refreshRuntimeStatus()
 	return fetchErr
