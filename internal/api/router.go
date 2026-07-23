@@ -67,6 +67,7 @@ func NewServer(cfg Config) *Server {
 			downloads:  cfg.Downloader,
 			ac:         cfg.AppCenter,
 			queue:      queue,
+			appsDir:    cfg.AppsDir,
 			configMgr:  cfg.ConfigMgr,
 			cacheStore: cfg.CacheStore,
 		},

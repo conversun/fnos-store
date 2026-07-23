@@ -33,6 +33,7 @@ type installPipeline struct {
 	downloads  *core.Downloader
 	ac         platform.AppCenter
 	queue      *OperationQueue
+	appsDir    string
 	configMgr  *config.Manager
 	cacheStore cacheTagStore
 }
@@ -161,7 +162,7 @@ func (p *installPipeline) startApp(appname string) error {
 
 // verifyRetryDelays are the sleep durations between successive Check() attempts
 // inside verifyInstalled. The first entry MUST be 0 so the first Check fires
-// immediately; subsequent entries pace the retry loop out to ~20s total to
+// immediately; subsequent entries pace the retry loop out to ~52s total to
 // survive fnOS appcenter-cli's async post-install registration commit.
 // See GitHub issue conversun/fnos-apps#181.
 var verifyRetryDelays = []time.Duration{
@@ -173,6 +174,10 @@ var verifyRetryDelays = []time.Duration{
 	3 * time.Second,
 	4 * time.Second,
 	6 * time.Second,
+	6 * time.Second,
+	8 * time.Second,
+	8 * time.Second,
+	10 * time.Second,
 }
 
 // verifyWait sleeps for d respecting ctx. Returns ctx.Err() if canceled.
@@ -202,14 +207,12 @@ var verifyWait = func(ctx context.Context, d time.Duration) error {
 //
 // Semantics:
 //   - Attempt 1 fires immediately (verifyRetryDelays[0] == 0).
-//   - Subsequent attempts pace to ~20s total budget.
-//   - Hard CLI errors (Check returns err != nil) short-circuit — no retry,
-//     since these indicate a real CLI/config failure, not a race.
+//   - Subsequent attempts pace to ~52s total budget.
+//   - Hard CLI errors (Check returns err != nil) get one filesystem-manifest
+//     confirmation, then short-circuit — no retry.
 //   - ctx cancellation is honored between attempts via verifyWait.
-//   - Final fallback: if all Check attempts return installed=false but
-//     List() shows the app registered with a sane status (running|stopped),
-//     treat as installed. Reject unknown/empty status to avoid masking
-//     partial-install failures.
+//   - Final fallbacks: accept a sane List() row (running|stopped), or an
+//     on-disk manifest when appcenter-cli output has drifted.
 func (p *installPipeline) verifyInstalled(ctx context.Context, appname string) error {
 	for i, delay := range verifyRetryDelays {
 		if err := verifyWait(ctx, delay); err != nil {
@@ -222,6 +225,10 @@ func (p *installPipeline) verifyInstalled(ctx context.Context, appname string) e
 			return e
 		})
 		if err != nil {
+			if p.manifestExists(appname) {
+				log.Printf("verifyInstalled: %s matched via filesystem fallback after Check() error", appname)
+				return nil
+			}
 			return err
 		}
 		log.Printf("verifyInstalled: %s attempt %d/%d installed=%v", appname, i+1, len(verifyRetryDelays), installed)
@@ -248,7 +255,16 @@ func (p *installPipeline) verifyInstalled(ctx context.Context, appname string) e
 			}
 		}
 	}
+	if p.manifestExists(appname) {
+		log.Printf("verifyInstalled: %s matched via filesystem fallback", appname)
+		return nil
+	}
 	return fmt.Errorf("安装后验证失败：应用未在 appcenter 注册（重试 %d 次共 %s 后仍未检出）。请查看应用日志或稍后重试", len(verifyRetryDelays), verifyTotal())
+}
+
+func (p *installPipeline) manifestExists(appname string) bool {
+	info, err := os.Stat(filepath.Join(p.appsDir, appname, "manifest"))
+	return err == nil && !info.IsDir()
 }
 
 // verifyTotal returns the total wall-clock time verifyInstalled will spend

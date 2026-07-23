@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -43,14 +45,14 @@ func (s *stubAppCenter) List() ([]platform.InstalledApp, error) {
 	return s.listResult, s.listErr
 }
 
-func (s *stubAppCenter) Status(string) (string, error)                 { return "", nil }
-func (s *stubAppCenter) InstallFpk(string, int) error                  { return nil }
-func (s *stubAppCenter) InstallLocal(string, int, bool) error          { return nil }
-func (s *stubAppCenter) Uninstall(string) error                        { return nil }
-func (s *stubAppCenter) Start(string) error                            { return nil }
-func (s *stubAppCenter) Stop(string) error                             { return nil }
-func (s *stubAppCenter) DefaultVolume() (int, error)                   { return 1, nil }
-func (s *stubAppCenter) ListVolumes() ([]platform.VolumeInfo, error)   { return nil, nil }
+func (s *stubAppCenter) Status(string) (string, error)               { return "", nil }
+func (s *stubAppCenter) InstallFpk(string, int) error                { return nil }
+func (s *stubAppCenter) InstallLocal(string, int, bool) error        { return nil }
+func (s *stubAppCenter) Uninstall(string) error                      { return nil }
+func (s *stubAppCenter) Start(string) error                          { return nil }
+func (s *stubAppCenter) Stop(string) error                           { return nil }
+func (s *stubAppCenter) DefaultVolume() (int, error)                 { return 1, nil }
+func (s *stubAppCenter) ListVolumes() ([]platform.VolumeInfo, error) { return nil, nil }
 
 // TestVerifyInstalled locks in the retry + List() fallback contract for
 // GitHub issue conversun/fnos-apps#181. Cases cover the happy path, the
@@ -58,6 +60,8 @@ func (s *stubAppCenter) ListVolumes() ([]platform.VolumeInfo, error)   { return 
 // only running/stopped, reject unknown), a hard CLI error that MUST NOT
 // retry, and ctx cancellation.
 func TestVerifyInstalled(t *testing.T) {
+	const appName = "plexmediaserver"
+
 	// Skip real sleeps but keep ctx-cancellation semantics.
 	origWait := verifyWait
 	verifyWait = func(ctx context.Context, _ time.Duration) error {
@@ -75,6 +79,7 @@ func TestVerifyInstalled(t *testing.T) {
 		checkScript []stubCheckResult
 		list        []platform.InstalledApp
 		listErr     error
+		manifest    bool
 		preCancel   bool
 		wantErr     bool
 		wantErrSub  string
@@ -98,13 +103,20 @@ func TestVerifyInstalled(t *testing.T) {
 			wantNList:  0,
 		},
 		{
+			name:        "extended_budget_attempts",
+			checkScript: []stubCheckResult{{installed: false}},
+			wantErr:     true,
+			wantNCheck:  12,
+			wantNList:   1,
+		},
+		{
 			name: "list_fallback_hit_running",
 			checkScript: []stubCheckResult{
 				{installed: false}, {installed: false}, {installed: false}, {installed: false},
 				{installed: false}, {installed: false}, {installed: false}, {installed: false},
 			},
 			list:       []platform.InstalledApp{{AppName: "plexmediaserver", Status: "running"}},
-			wantNCheck: 8,
+			wantNCheck: 12,
 			wantNList:  1,
 		},
 		{
@@ -114,8 +126,15 @@ func TestVerifyInstalled(t *testing.T) {
 				{installed: false}, {installed: false}, {installed: false}, {installed: false},
 			},
 			list:       []platform.InstalledApp{{AppName: "plexmediaserver", Status: "stopped"}},
-			wantNCheck: 8,
+			wantNCheck: 12,
 			wantNList:  1,
+		},
+		{
+			name:        "fs_fallback_hit_after_check_and_list_miss",
+			checkScript: []stubCheckResult{{installed: false}},
+			manifest:    true,
+			wantNCheck:  12,
+			wantNList:   1,
 		},
 		{
 			name: "list_fallback_reject_unknown_status",
@@ -126,7 +145,7 @@ func TestVerifyInstalled(t *testing.T) {
 			list:       []platform.InstalledApp{{AppName: "plexmediaserver", Status: "unknown"}},
 			wantErr:    true,
 			wantErrSub: "验证失败",
-			wantNCheck: 8,
+			wantNCheck: 12,
 			wantNList:  1,
 		},
 		{
@@ -138,7 +157,7 @@ func TestVerifyInstalled(t *testing.T) {
 			list:       []platform.InstalledApp{{AppName: "other-app", Status: "running"}},
 			wantErr:    true,
 			wantErrSub: "验证失败",
-			wantNCheck: 8,
+			wantNCheck: 12,
 			wantNList:  1,
 		},
 		{
@@ -150,11 +169,26 @@ func TestVerifyInstalled(t *testing.T) {
 			list:       nil,
 			wantErr:    true,
 			wantErrSub: "验证失败",
-			wantNCheck: 8,
+			wantNCheck: 12,
 			wantNList:  1,
 		},
 		{
-			name:        "hard_error_no_retry",
+			name:        "fs_fallback_miss",
+			checkScript: []stubCheckResult{{installed: false}},
+			wantErr:     true,
+			wantErrSub:  "重试 12 次共 51.5s",
+			wantNCheck:  12,
+			wantNList:   1,
+		},
+		{
+			name:        "hard_error_but_manifest_present_succeeds",
+			checkScript: []stubCheckResult{{installed: false, err: errors.New("cli exit 2")}},
+			manifest:    true,
+			wantNCheck:  1,
+			wantNList:   0,
+		},
+		{
+			name:        "hard_error_no_manifest_fails_fast",
 			checkScript: []stubCheckResult{{installed: false, err: errors.New("cli exit 2")}},
 			wantErr:     true,
 			wantErrSub:  "cli exit 2",
@@ -176,14 +210,26 @@ func TestVerifyInstalled(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			appsDir := t.TempDir()
+			if tc.manifest {
+				appDir := filepath.Join(appsDir, appName)
+				if err := os.MkdirAll(appDir, 0o755); err != nil {
+					t.Fatalf("create app dir: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(appDir, "manifest"), []byte("appname = "+appName+"\n"), 0o600); err != nil {
+					t.Fatalf("create manifest: %v", err)
+				}
+			}
+
 			stub := &stubAppCenter{
 				checkScript: tc.checkScript,
 				listResult:  tc.list,
 				listErr:     tc.listErr,
 			}
 			p := &installPipeline{
-				queue: NewOperationQueue(),
-				ac:    stub,
+				queue:   NewOperationQueue(),
+				ac:      stub,
+				appsDir: appsDir,
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -193,7 +239,7 @@ func TestVerifyInstalled(t *testing.T) {
 				t.Cleanup(cancel)
 			}
 
-			err := p.verifyInstalled(ctx, "plexmediaserver")
+			err := p.verifyInstalled(ctx, appName)
 
 			if tc.wantErr && err == nil {
 				t.Fatalf("expected error, got nil")
