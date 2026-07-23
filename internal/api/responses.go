@@ -1,5 +1,7 @@
 package api
 
+import "fnos-store/internal/diagnostics"
+
 type appResponse struct {
 	AppName          string `json:"appname"`
 	DisplayName      string `json:"display_name"`
@@ -72,6 +74,11 @@ type appLogsResponse struct {
 	LogLines   []string `json:"log_lines"`
 	Source     string   `json:"source"`
 	Containers []string `json:"containers,omitempty"`
+}
+
+type diagnosticResponse struct {
+	Report   diagnostics.DiagnosticReport `json:"report"`
+	IssueURL string                       `json:"issue_url"`
 }
 
 type errorResponse struct {
