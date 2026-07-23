@@ -1,11 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# MOCK_FAIL_STEP can be set to install, start, or verify to simulate
+# failures in the corresponding subcommand paths for dev QA.
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MOCK_APPS_DIR="${MOCK_APPS_DIR:-$SCRIPT_DIR/mock-apps}"
 MOCK_STATE_DIR="/tmp/fnos-store-dev/state"
 
 mkdir -p "$MOCK_STATE_DIR"
+
+cmd_maybe_fail() {
+    local step="$1"
+    if [ -n "${MOCK_FAIL_STEP:-}" ] && [ "$MOCK_FAIL_STEP" = "$step" ]; then
+        echo "mock failure: $MOCK_FAIL_STEP failed (simulated)" >&2
+        exit 1
+    fi
+}
 
 cmd_list() {
     printf "%-24s %-16s %-10s\n" "APPNAME" "VERSION" "STATUS"
@@ -25,6 +36,7 @@ cmd_list() {
 }
 
 cmd_check() {
+    cmd_maybe_fail verify
     local appname="$1"
     for manifest in "$MOCK_APPS_DIR"/*/manifest; do
         [ -f "$manifest" ] || continue
@@ -58,6 +70,7 @@ cmd_status() {
 }
 
 cmd_install_local() {
+    cmd_maybe_fail install
     local dir=""
     local volume=1
     while [ $# -gt 0 ]; do
@@ -88,6 +101,7 @@ cmd_install_local() {
 }
 
 cmd_install_fpk() {
+    cmd_maybe_fail install
     local fpk_path="$1"
     shift
     local volume=1
@@ -123,6 +137,7 @@ cmd_uninstall() {
 }
 
 cmd_start() {
+    cmd_maybe_fail start
     local appname="$1"
     echo "running" > "$MOCK_STATE_DIR/$appname"
     echo "Started $appname"
