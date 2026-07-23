@@ -81,42 +81,53 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
   const githubEnabled = mirror !== 'direct';
   const dockerEnabled = dockerMirror !== 'direct';
 
-  useEffect(() => {
+
+  // Reset speed-test results whenever the dialog opens (adjust state during render)
+  const [prevVisible, setPrevVisible] = useState(visible);
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
     if (visible) {
-      loadData();
+      setLoading(true);
       setGhLatency(new Map());
       setDkLatency(new Map());
     }
-  }, [visible]);
+  }
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [settings, store] = await Promise.all([
-        fetchSettings(),
-        fetchStoreUpdate()
-      ]);
-      setInterval(settings.check_interval_hours);
-      const m = settings.mirror || 'gh-proxy';
-      const dm = settings.docker_mirror || 'daocloud';
-      setMirror(m);
-      setMirrorOptions(settings.mirror_options || []);
-      setDockerMirror(dm);
-      setDockerMirrorOptions(settings.docker_mirror_options || []);
-      setCustomGithubMirror(settings.custom_github_mirror || '');
-      setCustomDockerMirror(settings.custom_docker_mirror || '');
-      setInstallVolume(settings.install_volume || 0);
-      setVolumeOptions(settings.volume_options || []);
-      if (m !== 'direct') prevMirrorRef.current = m;
-      if (dm !== 'direct') prevDockerMirrorRef.current = dm;
-      setStoreInfo(store);
-    } catch (error) {
-      console.error('Failed to load settings:', error);
-      toast.error('加载设置失败');
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    const loadData = async () => {
+      try {
+        const [settings, store] = await Promise.all([
+          fetchSettings(),
+          fetchStoreUpdate()
+        ]);
+        if (cancelled) return;
+        setInterval(settings.check_interval_hours);
+        const m = settings.mirror || 'gh-proxy';
+        const dm = settings.docker_mirror || 'daocloud';
+        setMirror(m);
+        setMirrorOptions(settings.mirror_options || []);
+        setDockerMirror(dm);
+        setDockerMirrorOptions(settings.docker_mirror_options || []);
+        setCustomGithubMirror(settings.custom_github_mirror || '');
+        setCustomDockerMirror(settings.custom_docker_mirror || '');
+        setInstallVolume(settings.install_volume || 0);
+        setVolumeOptions(settings.volume_options || []);
+        if (m !== 'direct') prevMirrorRef.current = m;
+        if (dm !== 'direct') prevDockerMirrorRef.current = dm;
+        setStoreInfo(store);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Failed to load settings:', error);
+        toast.error('加载设置失败');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    loadData();
+    return () => { cancelled = true; };
+  }, [visible]);
 
   const handleGhSpeedTest = async () => {
     setGhChecking(true);
