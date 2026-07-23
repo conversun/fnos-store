@@ -20,4 +20,13 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // shadcn/ui primitives are generated and intentionally co-export a
+    // component plus its variants helper (e.g. buttonVariants); the Vite
+    // Fast Refresh rule does not apply to these vendored files.
+    files: ['src/components/ui/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])
