@@ -37,6 +37,16 @@ interface AppDetailDialogProps {
   operation?: AppOperation;
 }
 
+const DetailRow: React.FC<{ icon: React.ElementType; label: string; children: React.ReactNode }> = ({ icon: Icon, label, children }) => (
+  <div className="flex items-start gap-3 py-2.5">
+    <Icon className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+    <div className="flex-1 min-w-0">
+      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+      <div className="text-sm text-foreground">{children}</div>
+    </div>
+  </div>
+);
+
 const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChange, onInstall, onUpdate, onIgnoreUpdate, onUnignoreUpdate, operation }) => {
   if (!app) return null;
 
@@ -73,16 +83,6 @@ const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChan
       return dateStr;
     }
   };
-
-  const DetailRow: React.FC<{ icon: React.ElementType; label: string; children: React.ReactNode }> = ({ icon: Icon, label, children }) => (
-    <div className="flex items-start gap-3 py-2.5">
-      <Icon className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-      <div className="flex-1 min-w-0">
-        <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
-        <div className="text-sm text-foreground">{children}</div>
-      </div>
-    </div>
-  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

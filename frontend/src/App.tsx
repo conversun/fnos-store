@@ -12,6 +12,7 @@ import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp, fetchStat
 import type { AppInfo, AppOperation, SSECallback, RecommendedApp } from './api/client';
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
+import { ReportFailureDialog } from './components/ReportFailureDialog';
 import {
   Dialog,
   DialogContent,
@@ -60,6 +61,7 @@ const App: React.FC = () => {
   const [loadMessages, setLoadMessages] = useState<{text: string; status: 'info' | 'success' | 'error'}[]>([]);
   const [checking, setChecking] = useState<boolean>(false);
   const [lastCheck, setLastCheck] = useState<string>('');
+  const [reportTarget, setReportTarget] = useState<{ app: string; step: string; error: string } | null>(null);
 
   const [appOperations, setAppOperations] = useState<Map<string, AppOperation>>(new Map());
   const [selfUpdateActive, setSelfUpdateActive] = useState(false);
@@ -244,7 +246,13 @@ const App: React.FC = () => {
     }
 
     if (data.step === 'error') {
-      toast.error(data.message || '发生未知错误');
+      const lastStep = appOperationsRef.current.get(appname)?.step || 'starting';
+      toast.error(data.message || '发生未知错误', {
+        action: {
+          label: '上报',
+          onClick: () => setReportTarget({ app: appname, step: lastStep, error: data.message || '发生未知错误' })
+        }
+      });
       setAppOp(appname, null);
       loadApps();
       return;
@@ -314,7 +322,12 @@ const App: React.FC = () => {
         return;
       }
       console.error(error);
-      toast.error('安装请求失败');
+      toast.error('安装请求失败', {
+        action: {
+          label: '上报',
+          onClick: () => setReportTarget({ app: app.appname, step: 'request', error: error instanceof Error ? error.message : String(error) })
+        }
+      });
     } finally {
       const hadOperation = appOperationsRef.current.has(appname);
       setAppOperations(prev => {
@@ -356,7 +369,12 @@ const App: React.FC = () => {
         return;
       }
       console.error(error);
-      toast.error('更新请求失败');
+      toast.error('更新请求失败', {
+        action: {
+          label: '上报',
+          onClick: () => setReportTarget({ app: app.appname, step: 'request', error: error instanceof Error ? error.message : String(error) })
+        }
+      });
     } finally {
       const hadOperation = appOperationsRef.current.has(appname);
       setAppOperations(prev => {
@@ -400,7 +418,12 @@ const App: React.FC = () => {
         return;
       }
       console.error(error);
-      toast.error('卸载请求失败');
+      toast.error('卸载请求失败', {
+        action: {
+          label: '上报',
+          onClick: () => setReportTarget({ app: app.appname, step: 'request', error: error instanceof Error ? error.message : String(error) })
+        }
+      });
     } finally {
       const hadOperation = appOperationsRef.current.has(appname);
       setAppOperations(prev => {
@@ -704,7 +727,7 @@ const App: React.FC = () => {
                     "w-full h-10 shadow-none text-muted-foreground hover:text-foreground",
                     sidebarCollapsed ? "justify-center px-0" : "justify-start px-3"
                   )}
-                  onClick={() => window.open('https://github.com/conversun/fnos-apps/issues', '_blank')}
+                  onClick={() => window.open('https://github.com/conversun/fnos-apps/issues/new?template=bug-report.yml', '_blank')}
                 >
                   <MessageCircle className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
                   {!sidebarCollapsed && <span className="flex-1 text-left whitespace-nowrap">问题反馈</span>}
@@ -834,7 +857,7 @@ const App: React.FC = () => {
                                  <Button
                                    variant="ghost"
                                    className="w-full justify-start h-10 px-3 shadow-none text-muted-foreground hover:text-foreground"
-                                   onClick={() => window.open('https://github.com/conversun/fnos-apps/issues', '_blank')}
+                                   onClick={() => window.open('https://github.com/conversun/fnos-apps/issues/new?template=bug-report.yml', '_blank')}
                                  >
                                     <MessageCircle className="mr-3 h-4 w-4 shrink-0" />
                                     <span className="flex-1 text-left">问题反馈</span>
@@ -1153,6 +1176,13 @@ const App: React.FC = () => {
         </Dialog>
       )}
 
+      <ReportFailureDialog
+        open={!!reportTarget}
+        onClose={() => setReportTarget(null)}
+        app={reportTarget?.app || ''}
+        step={reportTarget?.step || ''}
+        errorMessage={reportTarget?.error || ''}
+      />
       <Toaster />
     </div>
   );

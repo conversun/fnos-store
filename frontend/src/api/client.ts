@@ -305,3 +305,30 @@ export const unignoreUpdate = async (appname: string): Promise<void> => {
     throw new Error(`Failed to unignore update: ${response.statusText}`);
   }
 };
+
+export interface DiagnosticReport {
+  app: string;
+  display_name: string;
+  version?: string;
+  arch: 'x86' | 'ARM';
+  app_type?: string;
+  failed_step: string;
+  error_message: string;
+  log_tail: string;
+  log_truncated: boolean;
+  store_version: string;
+  platform: string;
+  timestamp: string;
+}
+
+export interface DiagnosticResponse {
+  report: DiagnosticReport;
+  issue_url: string;
+}
+
+export async function fetchDiagnostic(app: string, step: string, errorMsg: string): Promise<DiagnosticResponse> {
+  const params = new URLSearchParams({ step, error: errorMsg });
+  const res = await fetch(`/api/apps/${encodeURIComponent(app)}/diagnostic?${params}`);
+  if (!res.ok) throw new Error(`获取诊断信息失败: ${res.status}`);
+  return res.json();
+}
