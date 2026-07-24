@@ -50,6 +50,11 @@ type AppCenter interface {
 	// DefaultVolume returns the default installation volume index.
 	DefaultVolume() (int, error)
 
+	// SetDefaultVolume sets fnOS's default installation volume. This is the
+	// documented lever for install placement; install-local honors it even on
+	// builds where the undocumented -v flag is ignored.
+	SetDefaultVolume(volume int) error
+
 	// ListVolumes returns all available installation volumes.
 	ListVolumes() ([]VolumeInfo, error)
 

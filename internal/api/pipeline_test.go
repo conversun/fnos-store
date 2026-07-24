@@ -26,6 +26,9 @@ type stubAppCenter struct {
 	appVolErr   error
 	volumes     []platform.VolumeInfo
 
+	setVolCalls []int
+	setVolErr   error
+
 	nCheck int32
 	nList  int32
 }
@@ -60,6 +63,10 @@ func (s *stubAppCenter) DefaultVolume() (int, error)                 { return 1,
 func (s *stubAppCenter) ListVolumes() ([]platform.VolumeInfo, error) { return s.volumes, nil }
 func (s *stubAppCenter) AppInstallVolume(string) (int, bool, error) {
 	return s.appVolIdx, s.appVolFound, s.appVolErr
+}
+func (s *stubAppCenter) SetDefaultVolume(v int) error {
+	s.setVolCalls = append(s.setVolCalls, v)
+	return s.setVolErr
 }
 
 // TestVerifyInstalled locks in the retry + List() fallback contract for
@@ -354,6 +361,30 @@ func TestPreflightInstall(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "空间不足") {
 			t.Errorf("error %q missing space reason", err.Error())
+		}
+	})
+}
+
+// TestSetDefaultVolume locks that the update volume pin drives the documented
+// default-volume lever and surfaces CLI failures so the caller can fail closed
+// before the destructive install-local (conversun/fnos-apps#189).
+func TestSetDefaultVolume(t *testing.T) {
+	t.Run("propagates the target volume to the CLI", func(t *testing.T) {
+		stub := &stubAppCenter{}
+		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
+		if err := p.setDefaultVolume(3); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(stub.setVolCalls) != 1 || stub.setVolCalls[0] != 3 {
+			t.Fatalf("SetDefaultVolume calls = %v, want [3]", stub.setVolCalls)
+		}
+	})
+
+	t.Run("surfaces a CLI failure", func(t *testing.T) {
+		stub := &stubAppCenter{setVolErr: errors.New("cli boom")}
+		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
+		if err := p.setDefaultVolume(1); err == nil {
+			t.Fatal("expected error, got nil")
 		}
 	})
 }

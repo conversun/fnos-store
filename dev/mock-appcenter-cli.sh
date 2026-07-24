@@ -150,7 +150,15 @@ cmd_stop() {
 }
 
 cmd_default_volume() {
-    echo "1"
+    local vol_file="$MOCK_STATE_DIR/default-volume"
+    if [ -n "${1:-}" ]; then
+        echo "$1" > "$vol_file"
+        echo "Default volume set to $1"
+    elif [ -f "$vol_file" ]; then
+        cat "$vol_file"
+    else
+        echo "1"
+    fi
 }
 
 case "${1:-}" in
@@ -162,7 +170,7 @@ case "${1:-}" in
     uninstall)      cmd_uninstall "${2:?appname required}" ;;
     start)          cmd_start "${2:?appname required}" ;;
     stop)           cmd_stop "${2:?appname required}" ;;
-    default-volume) cmd_default_volume ;;
+    default-volume) shift; cmd_default_volume "${1:-}" ;;
     *)
         echo "Usage: mock-appcenter-cli.sh <command> [args]"
         echo "Commands: list, check, status, install-fpk, install-local, uninstall, start, stop, default-volume"

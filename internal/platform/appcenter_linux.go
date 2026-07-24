@@ -114,6 +114,11 @@ func (a *LinuxAppCenter) DefaultVolume() (int, error) {
 	return strconv.Atoi(out)
 }
 
+func (a *LinuxAppCenter) SetDefaultVolume(volume int) error {
+	_, err := a.run("default-volume", strconv.Itoa(volume))
+	return err
+}
+
 // isMountPoint returns true if path is a mount point (its device differs
 // from the parent directory's device). This filters out plain directories
 // like /vol00 or /vol02 that sit on the root partition and are not real

@@ -103,6 +103,11 @@ func (m *MockAppCenter) DefaultVolume() (int, error) {
 	return strconv.Atoi(out)
 }
 
+func (m *MockAppCenter) SetDefaultVolume(volume int) error {
+	_, err := m.run("default-volume", strconv.Itoa(volume))
+	return err
+}
+
 func (m *MockAppCenter) ListVolumes() ([]VolumeInfo, error) {
 	return []VolumeInfo{
 		{Index: 1, Path: "/vol1", TotalBytes: 1000204886016, FreeBytes: 536870912000},

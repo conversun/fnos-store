@@ -199,6 +199,17 @@ func (p *installPipeline) preflightInstall(volume int, fpkPath string) error {
 	return nil
 }
 
+// setDefaultVolume pins fnOS's default install volume via the documented
+// `appcenter-cli default-volume` lever. install-local honors it even on builds
+// where the undocumented -v flag is ignored, so updates pin it to the app's
+// current volume before the destructive step — belt-and-suspenders alongside
+// the -v argument (conversun/fnos-apps#189).
+func (p *installPipeline) setDefaultVolume(volume int) error {
+	return p.queue.WithCLI(func() error {
+		return p.ac.SetDefaultVolume(volume)
+	})
+}
+
 func (p *installPipeline) installFpk(fpkPath string, volume int) error {
 	return p.queue.WithCLI(func() error {
 		return p.ac.InstallFpk(fpkPath, volume)
@@ -551,6 +562,13 @@ func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, op
 		return
 	}
 
+	if opName == "update" {
+		if err := p.setDefaultVolume(volume); err != nil {
+			_ = stream.sendError(fmt.Sprintf("无法锁定安装目标卷 vol%d，已中止更新以保护现有数据: %v", volume, err))
+			return
+		}
+	}
+
 	if err := runWithVirtualProgress(ctx, stream, "installing", "正在安装...", func() error {
 		return p.installFpk(fpkPath, volume)
 	}); err != nil {
@@ -601,6 +619,11 @@ func (p *installPipeline) runSelfUpdate(ctx context.Context, stream *sseStream, 
 
 	if err := p.preflightInstall(volume, fpkPath); err != nil {
 		_ = stream.sendError(err.Error())
+		return
+	}
+
+	if err := p.setDefaultVolume(volume); err != nil {
+		_ = stream.sendError(fmt.Sprintf("无法锁定安装目标卷 vol%d，已中止商店更新以保护现有数据: %v", volume, err))
 		return
 	}
 
