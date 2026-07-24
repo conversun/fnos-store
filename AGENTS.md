@@ -105,6 +105,47 @@ cd frontend && npm run build          # Production build → ../web/
 cd frontend && npm run lint           # ESLint check
 ```
 
+## RELEASE
+
+**Two-hop process — the second hop is currently MANUAL (this is the #1 release gotcha).**
+Hop 1: tag `fnos-store` → CI builds binaries + GitHub release. Hop 2: build the `.fpk`
+from `conversun/fnos-apps` → publishes the installer + refreshes `apps.json` (what the app
+center's “检查更新” actually reads). Run hop 2 AFTER hop 1 finishes.
+
+**Version source of truth:** `fnos/manifest` (`version = X.Y.Z`; read by `storeVersion()`).
+Last released: **1.7.12**.
+
+```bash
+# From fnos-store/. VER = the new version, e.g. 1.7.13.
+# 1. Edit fnos/manifest:  version         = <VER>
+# 2. Commit fix(es) first, then a SEPARATE bump commit (repo convention):
+git commit -am "chore: bump version to <VER>"
+# 3. Push main + tag (the v* tag triggers .github/workflows/release.yml):
+git push origin main
+git tag -a v<VER> -m "fnos-store <VER>" && git push origin v<VER>
+# 4. release.yml builds linux amd64/arm64 + the GitHub release, and SHOULD auto-dispatch
+#    the fpk build — but that step is almost always SKIPPED (see gotcha). Once the release
+#    finishes, manually trigger hop 2:
+gh workflow run build-apps.yml --repo conversun/fnos-apps --ref main \
+  --field app=fnos-apps-store --field version=<VER>
+# 5. Verify:
+gh run list --repo conversun/fnos-apps --limit 3                    # "Build fnOS App Packages" = success
+gh release view fnos-apps-store/v<VER> --repo conversun/fnos-apps   # x86 + arm .fpk assets present
+curl -s https://raw.githubusercontent.com/conversun/fnos-apps/main/apps.json | grep -A5 fnos-apps-store  # -> <VER>
+```
+
+**⚠️ Why hop 2 is manual:** `release.yml`'s “Trigger fnos-apps rebuild” step is gated on
+`if: env.FNOS_APPS_DISPATCH_TOKEN != ''`. That secret is NOT set on `conversun/fnos-store`,
+so the step is silently **skipped every release** — the binaries release is created, but the
+`.fpk` is NOT built and `apps.json` is NOT refreshed. Confirmed skipped for 1.7.10 / 1.7.11 /
+1.7.12. Until fixed, **always run step 4 by hand.**
+
+**Make it one-command (do once):** add a PAT with `workflow` scope on `conversun/fnos-apps`
+as the dispatch token, after which hop 2 fires automatically on tag push:
+```bash
+gh secret set FNOS_APPS_DISPATCH_TOKEN --repo conversun/fnos-store --body <PAT>
+```
+
 ## NOTES
 
 - **Self-update kills the process** — `runSelfUpdate()` in pipeline.go: fnOS restarts the service after install-fpk. Frontend polls `/api/status` to detect restart.
