@@ -148,6 +148,57 @@ func (p *installPipeline) resolveVolume() (int, error) {
 	return volume, err
 }
 
+// resolveVolumeFor picks the installation volume for an operation. For an
+// update of an already-installed app it PINS to the volume the app currently
+// lives on: fnOS install-local does an uninstall-then-reinstall, so handing it
+// a different volume relocates the app and orphans its existing data (the data
+// loss reported in conversun/fnos-apps#189). It therefore fails closed rather
+// than falling back to the global default. Fresh installs use the configured
+// or default volume.
+func (p *installPipeline) resolveVolumeFor(opName, appname string) (int, error) {
+	if opName == "update" {
+		vol, found, err := p.ac.AppInstallVolume(appname)
+		if err != nil {
+			return 0, fmt.Errorf("无法确定 %s 当前所在的存储卷，已中止更新以保护现有数据: %w", appname, err)
+		}
+		if !found {
+			return 0, fmt.Errorf("无法确定 %s 当前所在的存储卷，已中止更新以保护现有数据。请在应用中心手动更新", appname)
+		}
+		return vol, nil
+	}
+	return p.resolveVolume()
+}
+
+// preflightInstall fails closed BEFORE the destructive install-local step,
+// which uninstalls the existing app before reinstalling. It confirms the target
+// volume is actually mounted and has generous free space, so a missing or full
+// volume aborts the operation instead of leaving the app uninstalled with its
+// data orphaned — the failure mode behind conversun/fnos-apps#189.
+func (p *installPipeline) preflightInstall(volume int, fpkPath string) error {
+	fi, err := os.Stat(fpkPath)
+	if err != nil {
+		return fmt.Errorf("安装包不可读，已中止安装以保护现有数据: %w", err)
+	}
+	volumes, err := p.ac.ListVolumes()
+	if err != nil {
+		return fmt.Errorf("无法枚举存储卷，已中止安装以保护现有数据: %w", err)
+	}
+	var target *platform.VolumeInfo
+	for i := range volumes {
+		if volumes[i].Index == volume {
+			target = &volumes[i]
+			break
+		}
+	}
+	if target == nil {
+		return fmt.Errorf("目标存储卷 vol%d 不可用（未挂载或不存在），已中止安装以保护现有数据。请在设置中选择正确的安装硬盘后重试", volume)
+	}
+	if need := uint64(fi.Size()) * 3; target.FreeBytes < need {
+		return fmt.Errorf("目标存储卷 vol%d 空间不足（可用 %d 字节，约需 %d 字节），已中止安装以保护现有数据", volume, target.FreeBytes, need)
+	}
+	return nil
+}
+
 func (p *installPipeline) installFpk(fpkPath string, volume int) error {
 	return p.queue.WithCLI(func() error {
 		return p.ac.InstallFpk(fpkPath, volume)
@@ -489,8 +540,13 @@ func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, op
 		}
 	}
 
-	volume, err := p.resolveVolume()
+	volume, err := p.resolveVolumeFor(opName, app.AppName)
 	if err != nil {
+		_ = stream.sendError(err.Error())
+		return
+	}
+
+	if err := p.preflightInstall(volume, fpkPath); err != nil {
 		_ = stream.sendError(err.Error())
 		return
 	}
@@ -537,8 +593,13 @@ func (p *installPipeline) runSelfUpdate(ctx context.Context, stream *sseStream, 
 	}
 	defer os.Remove(fpkPath)
 
-	volume, err := p.resolveVolume()
+	volume, err := p.resolveVolumeFor("update", app.AppName)
 	if err != nil {
+		_ = stream.sendError(err.Error())
+		return
+	}
+
+	if err := p.preflightInstall(volume, fpkPath); err != nil {
 		_ = stream.sendError(err.Error())
 		return
 	}

@@ -21,6 +21,11 @@ type stubAppCenter struct {
 	listResult  []platform.InstalledApp
 	listErr     error
 
+	appVolIdx   int
+	appVolFound bool
+	appVolErr   error
+	volumes     []platform.VolumeInfo
+
 	nCheck int32
 	nList  int32
 }
@@ -52,7 +57,10 @@ func (s *stubAppCenter) Uninstall(string) error                      { return ni
 func (s *stubAppCenter) Start(string) error                          { return nil }
 func (s *stubAppCenter) Stop(string) error                           { return nil }
 func (s *stubAppCenter) DefaultVolume() (int, error)                 { return 1, nil }
-func (s *stubAppCenter) ListVolumes() ([]platform.VolumeInfo, error) { return nil, nil }
+func (s *stubAppCenter) ListVolumes() ([]platform.VolumeInfo, error) { return s.volumes, nil }
+func (s *stubAppCenter) AppInstallVolume(string) (int, bool, error) {
+	return s.appVolIdx, s.appVolFound, s.appVolErr
+}
 
 // TestVerifyInstalled locks in the retry + List() fallback contract for
 // GitHub issue conversun/fnos-apps#181. Cases cover the happy path, the
@@ -263,4 +271,89 @@ func TestVerifyInstalled(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestResolveVolumeFor locks the update-pinning contract: an update targets the
+// app's CURRENT volume and fails closed when it cannot be determined, while a
+// fresh install uses the default volume. This is the core guard against the
+// cross-volume relocation data loss in conversun/fnos-apps#189.
+func TestResolveVolumeFor(t *testing.T) {
+	t.Run("update pins to the app's current volume", func(t *testing.T) {
+		stub := &stubAppCenter{appVolIdx: 2, appVolFound: true}
+		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
+		got, err := p.resolveVolumeFor("update", "emby")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != 2 {
+			t.Errorf("volume = %d, want 2", got)
+		}
+	})
+
+	t.Run("update fails closed when current volume is unresolvable", func(t *testing.T) {
+		stub := &stubAppCenter{appVolFound: false}
+		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
+		_, err := p.resolveVolumeFor("update", "emby")
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "已中止更新") {
+			t.Errorf("error %q missing abort reason", err.Error())
+		}
+	})
+
+	t.Run("install uses the default volume, not the pin", func(t *testing.T) {
+		stub := &stubAppCenter{appVolIdx: 2, appVolFound: true}
+		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
+		got, err := p.resolveVolumeFor("install", "emby")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != 1 {
+			t.Errorf("volume = %d, want 1 (DefaultVolume)", got)
+		}
+	})
+}
+
+// TestPreflightInstall locks the fail-closed guard that runs BEFORE the
+// destructive install-local step: a missing or full target volume aborts the
+// operation so the app is never left uninstalled with orphaned data.
+func TestPreflightInstall(t *testing.T) {
+	dir := t.TempDir()
+	fpk := filepath.Join(dir, "app.fpk")
+	if err := os.WriteFile(fpk, make([]byte, 1000), 0o600); err != nil {
+		t.Fatalf("write fpk: %v", err)
+	}
+
+	t.Run("passes when target volume is mounted with ample space", func(t *testing.T) {
+		stub := &stubAppCenter{volumes: []platform.VolumeInfo{{Index: 1, Path: "/vol1", FreeBytes: 1 << 40}}}
+		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
+		if err := p.preflightInstall(1, fpk); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("aborts when target volume is not mounted", func(t *testing.T) {
+		stub := &stubAppCenter{volumes: []platform.VolumeInfo{{Index: 1, Path: "/vol1", FreeBytes: 1 << 40}}}
+		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
+		err := p.preflightInstall(9, fpk)
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "不可用") {
+			t.Errorf("error %q missing unavailable reason", err.Error())
+		}
+	})
+
+	t.Run("aborts when target volume lacks free space", func(t *testing.T) {
+		stub := &stubAppCenter{volumes: []platform.VolumeInfo{{Index: 1, Path: "/vol1", FreeBytes: 100}}}
+		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
+		err := p.preflightInstall(1, fpk)
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "空间不足") {
+			t.Errorf("error %q missing space reason", err.Error())
+		}
+	})
 }

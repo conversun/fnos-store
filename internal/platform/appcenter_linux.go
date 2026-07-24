@@ -179,3 +179,28 @@ func (a *LinuxAppCenter) ListVolumes() ([]VolumeInfo, error) {
 	})
 	return volumes, nil
 }
+
+// AppInstallVolume resolves the volume an app currently lives on by reading its
+// /var/apps/<app>/target symlink (-> /volN/@appcenter/<app>) and matching the
+// resolved path against the mounted volumes. This is the CLI-independent source
+// of truth used to pin an update to the app's existing volume instead of a
+// re-resolved global default, which would relocate the app and orphan its data.
+// found is false when the app is not installed or its layout cannot be mapped
+// to a known volume.
+func (a *LinuxAppCenter) AppInstallVolume(appname string) (int, bool, error) {
+	volumes, err := a.ListVolumes()
+	if err != nil {
+		return 0, false, err
+	}
+	// Prefer the binary target; fall back to the runtime data dir.
+	for _, sub := range []string{"target", "var"} {
+		resolved, err := filepath.EvalSymlinks(filepath.Join("/var/apps", appname, sub))
+		if err != nil {
+			continue
+		}
+		if idx, ok := volumeIndexForPath(resolved, volumes); ok {
+			return idx, true, nil
+		}
+	}
+	return 0, false, nil
+}

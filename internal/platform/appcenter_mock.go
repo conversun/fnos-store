@@ -109,3 +109,7 @@ func (m *MockAppCenter) ListVolumes() ([]VolumeInfo, error) {
 		{Index: 2, Path: "/vol2", TotalBytes: 2000398934016, FreeBytes: 1503238553600},
 	}, nil
 }
+
+func (m *MockAppCenter) AppInstallVolume(string) (int, bool, error) {
+	return 1, true, nil
+}

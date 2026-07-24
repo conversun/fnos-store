@@ -52,4 +52,11 @@ type AppCenter interface {
 
 	// ListVolumes returns all available installation volumes.
 	ListVolumes() ([]VolumeInfo, error)
+
+	// AppInstallVolume resolves the volume index an app is CURRENTLY installed
+	// on, derived from its on-disk layout independently of appcenter-cli output.
+	// found is false when the app is not installed or its volume cannot be
+	// determined. Updates MUST pin to this volume so an app is never relocated
+	// off its existing data.
+	AppInstallVolume(appname string) (int, bool, error)
 }
