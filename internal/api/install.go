@@ -18,6 +18,16 @@ func (s *Server) handleInstall(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusNotFound, "app not found")
 		return
 	}
+	// Reject an already-installed app. install-local treats this as an UPGRADE:
+	// it would uninstall the existing copy before reinstalling, yet the "install"
+	// operation name skips the update-only volume pin in runStandard(), so the
+	// destructive step would run without the guard that protects existing data.
+	// Callers that mean to upgrade must use /update, which pins the app's current
+	// volume and fails closed when it cannot.
+	if app.Installed {
+		writeAPIError(w, http.StatusBadRequest, "应用已安装，请使用更新功能")
+		return
+	}
 
 	s.runInstallLikeOperation(w, r, "install", appname, app)
 }
