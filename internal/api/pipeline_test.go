@@ -28,6 +28,12 @@ type stubAppCenter struct {
 
 	setVolCalls []int
 	setVolErr   error
+	// curVol is the volume the stub reports from DefaultVolume(). A successful
+	// SetDefaultVolume updates it; setVolIgnored models the real fnOS defect
+	// where the setter exits 0 but the value never changes.
+	curVol        int
+	setVolIgnored bool
+	getVolErr     error
 
 	nCheck int32
 	nList  int32
@@ -53,20 +59,34 @@ func (s *stubAppCenter) List() ([]platform.InstalledApp, error) {
 	return s.listResult, s.listErr
 }
 
-func (s *stubAppCenter) Status(string) (string, error)               { return "", nil }
-func (s *stubAppCenter) InstallFpk(string, int) error                { return nil }
-func (s *stubAppCenter) InstallLocal(string, int, bool) error        { return nil }
-func (s *stubAppCenter) Uninstall(string) error                      { return nil }
-func (s *stubAppCenter) Start(string) error                          { return nil }
-func (s *stubAppCenter) Stop(string) error                           { return nil }
-func (s *stubAppCenter) DefaultVolume() (int, error)                 { return 1, nil }
+func (s *stubAppCenter) Status(string) (string, error)        { return "", nil }
+func (s *stubAppCenter) InstallFpk(string, int) error         { return nil }
+func (s *stubAppCenter) InstallLocal(string, int, bool) error { return nil }
+func (s *stubAppCenter) Uninstall(string) error               { return nil }
+func (s *stubAppCenter) Start(string) error                   { return nil }
+func (s *stubAppCenter) Stop(string) error                    { return nil }
+func (s *stubAppCenter) DefaultVolume() (int, error) {
+	if s.getVolErr != nil {
+		return 0, s.getVolErr
+	}
+	if s.curVol == 0 {
+		return 1, nil
+	}
+	return s.curVol, nil
+}
 func (s *stubAppCenter) ListVolumes() ([]platform.VolumeInfo, error) { return s.volumes, nil }
 func (s *stubAppCenter) AppInstallVolume(string) (int, bool, error) {
 	return s.appVolIdx, s.appVolFound, s.appVolErr
 }
 func (s *stubAppCenter) SetDefaultVolume(v int) error {
 	s.setVolCalls = append(s.setVolCalls, v)
-	return s.setVolErr
+	if s.setVolErr != nil {
+		return s.setVolErr
+	}
+	if !s.setVolIgnored {
+		s.curVol = v
+	}
+	return nil
 }
 
 // TestVerifyInstalled locks in the retry + List() fallback contract for
@@ -310,7 +330,11 @@ func TestResolveVolumeFor(t *testing.T) {
 	})
 
 	t.Run("install uses the default volume, not the pin", func(t *testing.T) {
-		stub := &stubAppCenter{appVolIdx: 2, appVolFound: true}
+		stub := &stubAppCenter{
+			appVolIdx:   2,
+			appVolFound: true,
+			volumes:     []platform.VolumeInfo{{Index: 1, Path: "/vol1"}},
+		}
 		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
 		got, err := p.resolveVolumeFor("install", "emby")
 		if err != nil {
@@ -318,6 +342,25 @@ func TestResolveVolumeFor(t *testing.T) {
 		}
 		if got != 1 {
 			t.Errorf("volume = %d, want 1 (DefaultVolume)", got)
+		}
+	})
+
+	// fnOS 1.2.0203 returns a default volume of 0 from the CLI even though its
+	// own database holds a valid index, and vol0 does not exist. Installing
+	// onto it always fails, so surface the one lever the user can actually
+	// pull instead of a generic downstream error.
+	t.Run("install rejects a default volume that is not mounted", func(t *testing.T) {
+		stub := &stubAppCenter{
+			curVol:  9,
+			volumes: []platform.VolumeInfo{{Index: 1, Path: "/vol1"}, {Index: 2, Path: "/vol2"}},
+		}
+		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
+		_, err := p.resolveVolumeFor("install", "emby")
+		if err == nil {
+			t.Fatal("expected error for an unmounted default volume, got nil")
+		}
+		if !strings.Contains(err.Error(), "设置") {
+			t.Errorf("error %q should point the user at settings", err.Error())
 		}
 	})
 }
@@ -385,6 +428,136 @@ func TestSetDefaultVolume(t *testing.T) {
 		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
 		if err := p.setDefaultVolume(1); err == nil {
 			t.Fatal("expected error, got nil")
+		}
+	})
+
+	// THE regression that motivated the read-back. On fnOS 1.2.0203 the real
+	// `appcenter-cli default-volume <n>` exits 0, prints the OLD value, and
+	// changes nothing. Trusting the setter's nil error let an update walk into
+	// install-local's uninstall step with an unpinned (invalid) volume, so the
+	// reinstall failed and the app was destroyed (conversun/fnos-apps#189).
+	t.Run("fails closed when the setter is silently ignored", func(t *testing.T) {
+		stub := &stubAppCenter{curVol: 0, setVolIgnored: true}
+		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
+		err := p.setDefaultVolume(2)
+		if err == nil {
+			t.Fatal("expected error when default-volume set is a no-op, got nil")
+		}
+		if !strings.Contains(err.Error(), "未生效") {
+			t.Errorf("error %q should report the pin did not take effect", err.Error())
+		}
+	})
+
+	t.Run("fails closed when the value cannot be read back", func(t *testing.T) {
+		stub := &stubAppCenter{getVolErr: errors.New("read boom")}
+		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
+		if err := p.setDefaultVolume(2); err == nil {
+			t.Fatal("expected error when read-back fails, got nil")
+		}
+	})
+}
+
+// TestVerifyPayloadLanded locks the filesystem proof that an install/update
+// actually produced files at the shipped version. The appcenter control plane
+// cannot be trusted for this: `check` returned "Installed" for an app whose
+// directory had been deleted, and an update reported 操作完成 while the on-disk
+// manifest still held the OLD version (conversun/fnos-apps#189).
+func TestVerifyPayloadLanded(t *testing.T) {
+	const appName = "filebrowser"
+
+	// newApp lays out the /var/apps/<app> shape the checker reads: a manifest
+	// plus a target symlink into the "volume" directory holding the payload.
+	newApp := func(t *testing.T, version string, payload bool) (appsDir string, volDir string) {
+		t.Helper()
+		root := t.TempDir()
+		appsDir = filepath.Join(root, "apps")
+		volDir = filepath.Join(root, "vol1", "@appcenter", appName)
+		if err := os.MkdirAll(filepath.Join(appsDir, appName), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(volDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if payload {
+			if err := os.WriteFile(filepath.Join(volDir, appName), []byte("binary"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := os.Symlink(volDir, filepath.Join(appsDir, appName, "target")); err != nil {
+			t.Fatal(err)
+		}
+		manifest := "appname         = " + appName + "\nversion         = " + version + "\n"
+		if err := os.WriteFile(filepath.Join(appsDir, appName, "manifest"), []byte(manifest), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return appsDir, volDir
+	}
+
+	t.Run("accepts a real install at the shipped version", func(t *testing.T) {
+		appsDir, _ := newApp(t, "2.63.19", true)
+		p := &installPipeline{queue: NewOperationQueue(), ac: &stubAppCenter{}, appsDir: appsDir}
+		if err := p.verifyPayloadLanded(appName, 0, "2.63.19"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	// The exact false-success observed on the VM: install-local exited 0, the
+	// control plane said Installed, but nothing was replaced.
+	t.Run("rejects an update whose version never changed", func(t *testing.T) {
+		appsDir, _ := newApp(t, "2.63.18", true)
+		p := &installPipeline{queue: NewOperationQueue(), ac: &stubAppCenter{}, appsDir: appsDir}
+		err := p.verifyPayloadLanded(appName, 0, "2.63.19")
+		if err == nil {
+			t.Fatal("expected error when the version did not change, got nil")
+		}
+		if !strings.Contains(err.Error(), "2.63.19") {
+			t.Errorf("error %q should name the expected version", err.Error())
+		}
+	})
+
+	// The store itself was found in this state: process alive, directory gone.
+	t.Run("rejects an empty install directory", func(t *testing.T) {
+		appsDir, _ := newApp(t, "2.63.19", false)
+		p := &installPipeline{queue: NewOperationQueue(), ac: &stubAppCenter{}, appsDir: appsDir}
+		err := p.verifyPayloadLanded(appName, 0, "2.63.19")
+		if err == nil {
+			t.Fatal("expected error for an empty install dir, got nil")
+		}
+		if !strings.Contains(err.Error(), "为空") {
+			t.Errorf("error %q should report the empty payload", err.Error())
+		}
+	})
+
+	t.Run("rejects a missing install directory", func(t *testing.T) {
+		appsDir, volDir := newApp(t, "2.63.19", true)
+		if err := os.RemoveAll(volDir); err != nil {
+			t.Fatal(err)
+		}
+		p := &installPipeline{queue: NewOperationQueue(), ac: &stubAppCenter{}, appsDir: appsDir}
+		if err := p.verifyPayloadLanded(appName, 0, "2.63.19"); err == nil {
+			t.Fatal("expected error for a missing install dir, got nil")
+		}
+	})
+
+	// Relocation is the data-orphaning half of #189: the app lands on a volume
+	// other than the one we pinned, leaving its data behind on the old one.
+	t.Run("rejects a payload that landed on the wrong volume", func(t *testing.T) {
+		appsDir, volDir := newApp(t, "2.63.19", true)
+		// Resolve first: on macOS t.TempDir() sits under a /var -> /private/var
+		// symlink, and verifyPayloadLanded compares the RESOLVED payload path.
+		resolvedVol, err := filepath.EvalSymlinks(volDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		volRoot := filepath.Dir(filepath.Dir(resolvedVol)) // .../vol1
+		stub := &stubAppCenter{volumes: []platform.VolumeInfo{{Index: 2, Path: volRoot}}}
+		p := &installPipeline{queue: NewOperationQueue(), ac: stub, appsDir: appsDir}
+		err = p.verifyPayloadLanded(appName, 1, "2.63.19")
+		if err == nil {
+			t.Fatal("expected error when the app landed on another volume, got nil")
+		}
+		if !strings.Contains(err.Error(), "vol2") {
+			t.Errorf("error %q should name the actual volume", err.Error())
 		}
 	})
 }

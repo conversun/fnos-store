@@ -27,13 +27,21 @@ func NewLinuxAppCenter() *LinuxAppCenter {
 	}
 }
 
+// run executes appcenter-cli and treats an error envelope in the output as a
+// failure even when the process exits 0 — which it always does. See clierr.go
+// for the measured evidence and why exit status cannot be trusted.
 func (a *LinuxAppCenter) run(args ...string) (string, error) {
 	cmd := exec.Command(a.CLIPath, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("appcenter-cli %s: %w: %s", strings.Join(args, " "), err, string(out))
 	}
-	return strings.TrimSpace(string(out)), nil
+	text := strings.TrimSpace(string(out))
+	if cliOutputFailure(text) {
+		return "", fmt.Errorf("appcenter-cli %s: %w: %s",
+			strings.Join(args, " "), ErrCLIFailure, cliErrorDetail(text))
+	}
+	return text, nil
 }
 
 func (a *LinuxAppCenter) List() ([]InstalledApp, error) {
@@ -49,11 +57,15 @@ func (a *LinuxAppCenter) Check(appname string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return out == "Installed", nil
+	return parseCheckOutput(out)
 }
 
 func (a *LinuxAppCenter) Status(appname string) (string, error) {
-	return a.run("status", appname)
+	out, err := a.run("status", appname)
+	if err != nil {
+		return "", err
+	}
+	return parseStatusOutput(out)
 }
 
 func (a *LinuxAppCenter) InstallFpk(fpkPath string, volume int) error {
@@ -65,13 +77,33 @@ func (a *LinuxAppCenter) InstallFpk(fpkPath string, volume int) error {
 	return a.InstallLocal(dir, volume, false)
 }
 
+// SelfUpdateLogPath is where a detached install-local writes its output.
+// The store process is killed by fnOS partway through its own update, so this
+// file is the only record of whether the update actually succeeded — the
+// previous implementation discarded both streams, making every self-update
+// failure invisible after the restart.
+const SelfUpdateLogPath = "/tmp/fnos-store-selfupdate.log"
+
+// InstallLocal runs install-local, which is destructive: fnOS uninstalls the
+// existing app before reinstalling it. The -v/--volume flag is documented by
+// the CLI itself as "(ignored during upgrades)", so it does NOT protect an
+// update from being placed elsewhere — only the daemon's default-volume does.
+//
+// When detach is set the child runs in its own session so it survives this
+// process being killed during the uninstall phase, and its output is captured
+// to SelfUpdateLogPath for post-restart diagnosis.
 func (a *LinuxAppCenter) InstallLocal(dir string, volume int, detach bool) error {
 	args := []string{"install-local", "--dir", dir, "-v", strconv.Itoa(volume)}
 	if detach {
 		cmd := exec.Command(a.CLIPath, args...)
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-		cmd.Stdout = nil
-		cmd.Stderr = nil
+		// Best-effort: losing the log must not block the update itself, it
+		// only costs us the post-restart failure diagnosis.
+		if f, err := os.OpenFile(SelfUpdateLogPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644); err == nil {
+			defer f.Close()
+			cmd.Stdout = f
+			cmd.Stderr = f
+		}
 		return cmd.Start()
 	}
 	_, err := a.run(args...)
@@ -88,6 +120,7 @@ func (a *LinuxAppCenter) extractFpk(fpkPath string) (string, error) {
 		os.RemoveAll(dir)
 		return "", fmt.Errorf("extract fpk: %w: %s", err, string(out))
 	}
+	EnsureHooksExecutable(dir)
 	return dir, nil
 }
 
@@ -111,9 +144,13 @@ func (a *LinuxAppCenter) DefaultVolume() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	return strconv.Atoi(out)
+	return parseVolumeOutput(out)
 }
 
+// SetDefaultVolume asks the CLI to move fnOS's default install volume.
+// It reports only whether the command was accepted; on some fnOS builds the
+// set is a silent no-op, so callers MUST read the value back and compare
+// rather than treating a nil error as proof the volume was pinned.
 func (a *LinuxAppCenter) SetDefaultVolume(volume int) error {
 	_, err := a.run("default-volume", strconv.Itoa(volume))
 	return err

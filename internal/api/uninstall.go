@@ -1,6 +1,11 @@
 package api
 
-import "net/http"
+import (
+	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
+)
 
 func (s *Server) handleUninstall(w http.ResponseWriter, r *http.Request) {
 	appname := r.PathValue("appname")
@@ -21,15 +26,28 @@ func (s *Server) handleUninstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Stop is best-effort: an app that is already stopped (or whose service
+	// entry is gone) must not block the uninstall the user asked for. The
+	// error is surfaced only if the uninstall itself then fails.
 	_ = stream.sendProgress(progressPayload{Step: "stopping", Message: "正在停止..."})
-	if err := s.queue.WithCLI(func() error { return s.ac.Stop(appname) }); err != nil {
+	stopErr := s.queue.WithCLI(func() error { return s.ac.Stop(appname) })
+
+	_ = stream.sendProgress(progressPayload{Step: "uninstalling", Message: "正在卸载..."})
+	if err := s.queue.WithCLI(func() error { return s.ac.Uninstall(appname) }); err != nil {
+		if stopErr != nil {
+			_ = stream.sendError(fmt.Sprintf("%v（停止阶段也失败: %v）", err, stopErr))
+			return
+		}
 		_ = stream.sendError(err.Error())
 		return
 	}
 
-	_ = stream.sendProgress(progressPayload{Step: "uninstalling", Message: "正在卸载..."})
-	if err := s.queue.WithCLI(func() error { return s.ac.Uninstall(appname) }); err != nil {
-		_ = stream.sendError(err.Error())
+	// appcenter-cli exits 0 even when uninstall fails, so confirm the app is
+	// really gone before telling the user it was removed. Without this a failed
+	// uninstall still reported 卸载完成 and dropped the cache tag, leaving the
+	// UI and the system disagreeing about what is installed.
+	if _, err := os.Stat(filepath.Join(s.appsDir, appname, "manifest")); err == nil {
+		_ = stream.sendError("卸载未生效：应用仍存在于系统中。请在应用中心手动卸载")
 		return
 	}
 

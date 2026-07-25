@@ -53,6 +53,9 @@ func (p *installPipeline) extractFpk(fpkPath string) (string, error) {
 		os.RemoveAll(dir)
 		return "", fmt.Errorf("解压 fpk 失败: %w: %s", err, string(out))
 	}
+	// Self-update feeds this directory straight to install-local, so the hooks
+	// must be executable here too — see platform.EnsureHooksExecutable.
+	platform.EnsureHooksExecutable(dir)
 	return dir, nil
 }
 
@@ -133,6 +136,15 @@ func (p *installPipeline) downloadFpk(ctx context.Context, stream *sseStream, ap
 	return fpkPath, err
 }
 
+// resolveVolume picks the volume for a FRESH install: the user's explicit
+// choice if set, otherwise fnOS's default.
+//
+// The CLI's default-volume getter is unreliable — on fnOS 1.2.0203 it returns
+// 0 while the daemon's own database holds a valid index — and vol0 does not
+// exist, so the value is validated against the mounted volumes. When it is
+// unusable the error names the one lever that actually works (picking a disk
+// in settings) instead of letting the install fail later with a generic
+// "volume unavailable" the user cannot act on.
 func (p *installPipeline) resolveVolume() (int, error) {
 	if p.configMgr != nil {
 		if v := p.configMgr.Get().InstallVolume; v > 0 {
@@ -145,7 +157,30 @@ func (p *installPipeline) resolveVolume() (int, error) {
 		volume, e = p.ac.DefaultVolume()
 		return e
 	})
-	return volume, err
+	if err != nil {
+		return 0, fmt.Errorf("无法获取默认安装硬盘（%w）。请在设置中选择安装硬盘后重试", err)
+	}
+	if !p.volumeIsMounted(volume) {
+		return 0, fmt.Errorf("fnOS 返回的默认安装硬盘 vol%d 不可用。请在设置中手动选择安装硬盘后重试", volume)
+	}
+	return volume, nil
+}
+
+// volumeIsMounted reports whether idx names a currently mounted volume.
+// A ListVolumes failure is treated as "mounted" so a transient enumeration
+// error does not block installs — preflightInstall re-checks before anything
+// destructive happens.
+func (p *installPipeline) volumeIsMounted(idx int) bool {
+	volumes, err := p.ac.ListVolumes()
+	if err != nil {
+		return true
+	}
+	for _, v := range volumes {
+		if v.Index == idx {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveVolumeFor picks the installation volume for an operation. For an
@@ -199,14 +234,32 @@ func (p *installPipeline) preflightInstall(volume int, fpkPath string) error {
 	return nil
 }
 
-// setDefaultVolume pins fnOS's default install volume via the documented
-// `appcenter-cli default-volume` lever. install-local honors it even on builds
-// where the undocumented -v flag is ignored, so updates pin it to the app's
-// current volume before the destructive step — belt-and-suspenders alongside
-// the -v argument (conversun/fnos-apps#189).
+// setDefaultVolume pins fnOS's default install volume and PROVES it took
+// effect by reading the value back inside the same CLI critical section.
+//
+// The read-back is the whole point. `appcenter-cli default-volume <n>` exits 0
+// and prints the unchanged value when the daemon declines the change, so a nil
+// error from the setter is NOT evidence the volume was pinned. Worse, the CLI's
+// own help documents -v/--volume as "(ignored during upgrades)", which means
+// default-volume is the ONLY effective placement control for the destructive
+// install-local path. Trusting an unverified setter is exactly how an update
+// proceeded into an uninstall it could not undo (conversun/fnos-apps#189).
+//
+// Set and get share one WithCLI block so a concurrent operation cannot slip in
+// between them and invalidate the verification.
 func (p *installPipeline) setDefaultVolume(volume int) error {
 	return p.queue.WithCLI(func() error {
-		return p.ac.SetDefaultVolume(volume)
+		if err := p.ac.SetDefaultVolume(volume); err != nil {
+			return err
+		}
+		got, err := p.ac.DefaultVolume()
+		if err != nil {
+			return fmt.Errorf("设置后无法读回默认安装卷: %w", err)
+		}
+		if got != volume {
+			return fmt.Errorf("默认安装卷设置未生效（请求 vol%d，实际仍为 vol%d）", volume, got)
+		}
+		return nil
 	})
 }
 
@@ -327,6 +380,82 @@ func (p *installPipeline) verifyInstalled(ctx context.Context, appname string) e
 func (p *installPipeline) manifestExists(appname string) bool {
 	info, err := os.Stat(filepath.Join(p.appsDir, appname, "manifest"))
 	return err == nil && !info.IsDir()
+}
+
+// verifyPayloadLanded proves an install/update actually produced files, on the
+// volume we pinned, at the version we shipped. It runs AFTER verifyInstalled
+// because the appcenter control plane is not trustworthy on its own:
+//
+//   - `check` returned "Installed" for an app whose entire directory had been
+//     deleted (the store itself was in that state: its binary showed as
+//     "(deleted)" in /proc while check still claimed Installed).
+//   - install-local can uninstall the old copy, fail the reinstall, and still
+//     exit 0 — leaving a stale manifest that the control-plane checks happily
+//     accept as success.
+//
+// wantVersion is the version the fpk was supposed to deliver. It is compared
+// only when known and only for updates, where an unchanged version is proof
+// the reinstall silently did nothing (observed: filebrowser "updated"
+// 2.63.18 -> 2.63.19 reported 操作完成 while the on-disk manifest and binary
+// never changed).
+func (p *installPipeline) verifyPayloadLanded(appname string, wantVolume int, wantVersion string) error {
+	targetLink := filepath.Join(p.appsDir, appname, "target")
+	resolved, err := filepath.EvalSymlinks(targetLink)
+	if err != nil {
+		return fmt.Errorf("安装校验失败：无法定位 %s 的安装目录（%v）。应用可能未成功安装，请在应用中心确认", appname, err)
+	}
+
+	entries, err := os.ReadDir(resolved)
+	if err != nil {
+		return fmt.Errorf("安装校验失败：无法读取 %s 的安装目录 %s（%v）", appname, resolved, err)
+	}
+	if len(entries) == 0 {
+		return fmt.Errorf("安装校验失败：%s 的安装目录 %s 为空，安装包未落盘。请在应用中心手动重新安装", appname, resolved)
+	}
+
+	// Confirm the payload landed on the volume we pinned. A mismatch means the
+	// app was relocated, which orphans its data under the old volume.
+	if wantVolume > 0 {
+		volumes, err := p.ac.ListVolumes()
+		if err == nil {
+			if idx, ok := volumeIndexOf(resolved, volumes); ok && idx != wantVolume {
+				return fmt.Errorf("安装校验失败：%s 被安装到 vol%d，而非预期的 vol%d，原有数据可能已被遗留在 vol%d。请在应用中心确认",
+					appname, idx, wantVolume, wantVolume)
+			}
+		}
+	}
+
+	if wantVersion == "" {
+		return nil
+	}
+	m, err := core.ParseManifest(filepath.Join(p.appsDir, appname, "manifest"))
+	if err != nil {
+		// Manifest unreadable but files landed: don't fail the operation on a
+		// parse problem alone — the payload check above already passed.
+		log.Printf("verifyPayloadLanded: %s manifest unreadable: %v", appname, err)
+		return nil
+	}
+	if m.Version != "" && m.Version != wantVersion {
+		return fmt.Errorf("更新校验失败：%s 仍是 %s，未升级到 %s。安装程序报告成功但未生效，请在应用中心手动更新",
+			appname, m.Version, wantVersion)
+	}
+	return nil
+}
+
+// volumeIndexOf reports which mounted volume contains path.
+func volumeIndexOf(path string, volumes []platform.VolumeInfo) (int, bool) {
+	bestIdx, bestLen := 0, -1
+	clean := filepath.Clean(path)
+	for _, v := range volumes {
+		vp := filepath.Clean(v.Path)
+		if clean != vp && !strings.HasPrefix(clean, vp+string(filepath.Separator)) {
+			continue
+		}
+		if len(vp) > bestLen {
+			bestIdx, bestLen = v.Index, len(vp)
+		}
+	}
+	return bestIdx, bestLen >= 0
 }
 
 // verifyTotal returns the total wall-clock time verifyInstalled will spend
@@ -576,8 +705,19 @@ func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, op
 		return
 	}
 
+	expectedVersion := app.FpkVersion
+	if expectedVersion == "" {
+		expectedVersion = app.LatestVersion
+	}
+
 	if err := runWithVirtualProgress(ctx, stream, "verifying", "正在验证安装...", func() error {
-		return p.verifyInstalled(ctx, app.AppName)
+		if err := p.verifyInstalled(ctx, app.AppName); err != nil {
+			return err
+		}
+		// The control-plane checks above can pass on a destroyed app, so the
+		// operation is only really successful once the payload is proven on
+		// disk, on the pinned volume, at the shipped version.
+		return p.verifyPayloadLanded(app.AppName, volume, expectedVersion)
 	}); err != nil {
 		_ = stream.sendError(err.Error())
 		return
@@ -596,10 +736,7 @@ func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, op
 
 	_ = refreshFn(ctx)
 
-	newVersion := app.FpkVersion
-	if newVersion == "" {
-		newVersion = app.LatestVersion
-	}
+	newVersion := expectedVersion
 	_ = stream.sendProgress(progressPayload{Step: "done", NewVersion: newVersion, Message: "操作完成"})
 }
 
