@@ -467,6 +467,35 @@ func TestVerifyPayloadLanded(t *testing.T) {
 
 	// newApp lays out the /var/apps/<app> shape the checker reads: a manifest
 	// plus a target symlink into the "volume" directory holding the payload.
+	// newAppRev lays out an app whose manifest carries BOTH version and
+	// fpk_version, the shape a repackaged (-rN) build actually ships.
+	newAppRev := func(t *testing.T, version, fpkVersion string) string {
+		t.Helper()
+		root := t.TempDir()
+		appsDir := filepath.Join(root, "apps")
+		volDir := filepath.Join(root, "vol1", "@appcenter", appName)
+		if err := os.MkdirAll(filepath.Join(appsDir, appName), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(volDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(volDir, appName), []byte("binary"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(volDir, filepath.Join(appsDir, appName, "target")); err != nil {
+			t.Fatal(err)
+		}
+		manifest := "appname         = " + appName + "\nversion         = " + version + "\n"
+		if fpkVersion != "" {
+			manifest += "fpk_version     = " + fpkVersion + "\n"
+		}
+		if err := os.WriteFile(filepath.Join(appsDir, appName, "manifest"), []byte(manifest), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return appsDir
+	}
+
 	newApp := func(t *testing.T, version string, payload bool) (appsDir string, volDir string) {
 		t.Helper()
 		root := t.TempDir()
@@ -536,6 +565,39 @@ func TestVerifyPayloadLanded(t *testing.T) {
 		p := &installPipeline{queue: NewOperationQueue(), ac: &stubAppCenter{}, appsDir: appsDir}
 		if err := p.verifyPayloadLanded(appName, 0, "2.63.19"); err == nil {
 			t.Fatal("expected error for a missing install dir, got nil")
+		}
+	})
+
+	// A repackaged build ships fpk_version=1.9.3-r2 while the manifest's own
+	// version stays 1.9.3. runStandard passes app.FpkVersion as wantVersion, so
+	// comparing it against manifest `version` would reject a PERFECTLY GOOD
+	// install. 29 of the 145 catalogued apps carry a -rN suffix (1panel, alist,
+	// gitea, gopeed, embyserver ...), so this is a fifth of the catalog.
+	t.Run("accepts a revision package by fpk_version", func(t *testing.T) {
+		appsDir := newAppRev(t, "1.9.3", "1.9.3-r2")
+		p := &installPipeline{queue: NewOperationQueue(), ac: &stubAppCenter{}, appsDir: appsDir}
+		if err := p.verifyPayloadLanded(appName, 0, "1.9.3-r2"); err != nil {
+			t.Fatalf("revision package must be accepted, got: %v", err)
+		}
+	})
+
+	t.Run("still rejects a revision package that did not upgrade", func(t *testing.T) {
+		appsDir := newAppRev(t, "1.9.3", "1.9.3-r1")
+		p := &installPipeline{queue: NewOperationQueue(), ac: &stubAppCenter{}, appsDir: appsDir}
+		err := p.verifyPayloadLanded(appName, 0, "1.9.3-r2")
+		if err == nil {
+			t.Fatal("expected error when fpk_version did not change, got nil")
+		}
+		if !strings.Contains(err.Error(), "1.9.3-r2") {
+			t.Errorf("error %q should name the expected version", err.Error())
+		}
+	})
+
+	t.Run("falls back to version when no fpk_version is shipped", func(t *testing.T) {
+		appsDir := newAppRev(t, "2.63.19", "")
+		p := &installPipeline{queue: NewOperationQueue(), ac: &stubAppCenter{}, appsDir: appsDir}
+		if err := p.verifyPayloadLanded(appName, 0, "2.63.19"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 

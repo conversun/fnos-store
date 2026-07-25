@@ -82,7 +82,11 @@ func (a *LinuxAppCenter) InstallFpk(fpkPath string, volume int) error {
 // file is the only record of whether the update actually succeeded — the
 // previous implementation discarded both streams, making every self-update
 // failure invisible after the restart.
-const SelfUpdateLogPath = "/tmp/fnos-store-selfupdate.log"
+//
+// It lives under the app's own log directory, NOT /tmp: this process runs as
+// root, and a predictable name in a world-writable directory lets any local
+// user pre-create a symlink and have root truncate an arbitrary file.
+const SelfUpdateLogPath = "/var/log/apps/fnos-apps-store-selfupdate.log"
 
 // InstallLocal runs install-local, which is destructive: fnOS uninstalls the
 // existing app before reinstalling it. The -v/--volume flag is documented by
@@ -97,9 +101,11 @@ func (a *LinuxAppCenter) InstallLocal(dir string, volume int, detach bool) error
 	if detach {
 		cmd := exec.Command(a.CLIPath, args...)
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-		// Best-effort: losing the log must not block the update itself, it
-		// only costs us the post-restart failure diagnosis.
-		if f, err := os.OpenFile(SelfUpdateLogPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644); err == nil {
+		// O_NOFOLLOW refuses a symlink planted at the log path; 0600 keeps the
+		// CLI diagnostics root-only. Best-effort: losing the log must not block
+		// the update, it only costs us the post-restart failure diagnosis.
+		if f, err := os.OpenFile(SelfUpdateLogPath,
+			os.O_CREATE|os.O_WRONLY|os.O_TRUNC|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0o600); err == nil {
 			defer f.Close()
 			cmd.Stdout = f
 			cmd.Stderr = f

@@ -46,8 +46,14 @@ func (s *Server) handleUninstall(w http.ResponseWriter, r *http.Request) {
 	// really gone before telling the user it was removed. Without this a failed
 	// uninstall still reported 卸载完成 and dropped the cache tag, leaving the
 	// UI and the system disagreeing about what is installed.
+	// Only a definitive "not there" proves removal. Treating ANY stat error as
+	// success would let a permission or transient I/O error masquerade as a
+	// completed uninstall.
 	if _, err := os.Stat(filepath.Join(s.appsDir, appname, "manifest")); err == nil {
 		_ = stream.sendError("卸载未生效：应用仍存在于系统中。请在应用中心手动卸载")
+		return
+	} else if !os.IsNotExist(err) {
+		_ = stream.sendError(fmt.Sprintf("卸载结果无法确认（%v）。请在应用中心确认应用是否已移除", err))
 		return
 	}
 

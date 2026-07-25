@@ -47,6 +47,87 @@ func TestEnsureHooksExecutable(t *testing.T) {
 		}
 	})
 
+	// os.Chmod FOLLOWS symlinks, so a crafted fpk could otherwise reach outside
+	// the extraction root. Both the cmd/ directory itself and its entries must
+	// be refused when they are links.
+	t.Run("refuses a symlinked cmd directory", func(t *testing.T) {
+		root := t.TempDir()
+		outside := filepath.Join(root, "outside")
+		if err := os.MkdirAll(outside, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		victim := filepath.Join(outside, "secret")
+		if err := os.WriteFile(victim, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		dir := filepath.Join(root, "fpk")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(outside, filepath.Join(dir, "cmd")); err != nil {
+			t.Fatal(err)
+		}
+
+		EnsureHooksExecutable(dir)
+
+		info, err := os.Stat(victim)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Errorf("file outside the extract root changed to %v, want unchanged 0600", info.Mode().Perm())
+		}
+	})
+
+	t.Run("skips a symlinked entry inside cmd", func(t *testing.T) {
+		root := t.TempDir()
+		victim := filepath.Join(root, "secret")
+		if err := os.WriteFile(victim, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		dir := filepath.Join(root, "fpk")
+		cmdDir := filepath.Join(dir, "cmd")
+		if err := os.MkdirAll(cmdDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(victim, filepath.Join(cmdDir, "install_init")); err != nil {
+			t.Fatal(err)
+		}
+
+		EnsureHooksExecutable(dir)
+
+		info, err := os.Stat(victim)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Errorf("symlink target changed to %v, want unchanged 0600", info.Mode().Perm())
+		}
+	})
+
+	// A 0600 hook must become 0700, not world-readable 0755.
+	t.Run("mirrors read bits instead of forcing 0755", func(t *testing.T) {
+		dir := t.TempDir()
+		cmdDir := filepath.Join(dir, "cmd")
+		if err := os.MkdirAll(cmdDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		hook := filepath.Join(cmdDir, "install_init")
+		if err := os.WriteFile(hook, []byte("#!/bin/sh\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		EnsureHooksExecutable(dir)
+
+		info, err := os.Stat(hook)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); got != 0o700 {
+			t.Errorf("mode = %v, want 0700 (owner-only, executable)", got)
+		}
+	})
+
 	t.Run("tolerates a missing cmd directory", func(t *testing.T) {
 		// A docker-only fpk has no cmd/ hooks; this must not panic.
 		EnsureHooksExecutable(t.TempDir())

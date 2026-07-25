@@ -393,11 +393,13 @@ func (p *installPipeline) manifestExists(appname string) bool {
 //     exit 0 — leaving a stale manifest that the control-plane checks happily
 //     accept as success.
 //
-// wantVersion is the version the fpk was supposed to deliver. It is compared
-// only when known and only for updates, where an unchanged version is proof
-// the reinstall silently did nothing (observed: filebrowser "updated"
-// 2.63.18 -> 2.63.19 reported 操作完成 while the on-disk manifest and binary
-// never changed).
+// wantVersion is the version the fpk was supposed to deliver — app.FpkVersion,
+// which for a repackaged build carries a revision suffix (1.9.3-r2) that the
+// manifest's own `version` field does NOT have. It is therefore compared
+// against the manifest's fpk_version first, falling back to version only when
+// the package ships no fpk_version. Comparing it against `version` alone would
+// reject a perfectly good install of any revision package — 29 of 145 apps in
+// the catalog carry a -rN suffix (1panel, alist, gitea, gopeed, embyserver …).
 func (p *installPipeline) verifyPayloadLanded(appname string, wantVolume int, wantVersion string) error {
 	targetLink := filepath.Join(p.appsDir, appname, "target")
 	resolved, err := filepath.EvalSymlinks(targetLink)
@@ -435,9 +437,15 @@ func (p *installPipeline) verifyPayloadLanded(appname string, wantVolume int, wa
 		log.Printf("verifyPayloadLanded: %s manifest unreadable: %v", appname, err)
 		return nil
 	}
-	if m.Version != "" && m.Version != wantVersion {
+	// Prefer fpk_version: that is the field wantVersion (app.FpkVersion) actually
+	// corresponds to, including any -rN revision suffix.
+	installed := m.FpkVersion
+	if installed == "" {
+		installed = m.Version
+	}
+	if installed != "" && installed != wantVersion {
 		return fmt.Errorf("更新校验失败：%s 仍是 %s，未升级到 %s。安装程序报告成功但未生效，请在应用中心手动更新",
-			appname, m.Version, wantVersion)
+			appname, installed, wantVersion)
 	}
 	return nil
 }
@@ -782,7 +790,14 @@ func (p *installPipeline) runSelfUpdate(ctx context.Context, stream *sseStream, 
 
 	// Detached: appcenter-cli runs in a new session so it survives this
 	// process being killed during install-local's uninstall phase.
-	if err := p.ac.InstallLocal(dir, volume, true); err != nil {
+	//
+	// Still routed through WithCLI even though it returns immediately: the
+	// scheduler's registry refresh calls List() through the same lock, and the
+	// launch must not interleave with it. cmd.Start() does not wait for the
+	// child, so holding the lock here costs nothing.
+	if err := p.queue.WithCLI(func() error {
+		return p.ac.InstallLocal(dir, volume, true)
+	}); err != nil {
 		// The fork itself failed - the child never started, so it's safe
 		// (and necessary) to clean up the extracted directory here.
 		log.Printf("runSelfUpdate: InstallLocal launch failed: %v", err)
