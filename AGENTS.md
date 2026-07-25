@@ -113,7 +113,7 @@ from `conversun/fnos-apps` → publishes the installer + refreshes `apps.json` (
 center's “检查更新” actually reads). Run hop 2 AFTER hop 1 finishes.
 
 **Version source of truth:** `fnos/manifest` (`version = X.Y.Z`; read by `storeVersion()`).
-Last released: **1.7.12**.
+Last released: **1.7.14**.
 
 ```bash
 # From fnos-store/. VER = the new version, e.g. 1.7.13.
