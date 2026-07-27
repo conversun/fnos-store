@@ -77,4 +77,13 @@ type AppCenter interface {
 	// through install-local, which implements an upgrade as
 	// uninstall-then-reinstall and destroys the app when the reinstall fails.
 	UpgradeFpk(ctx context.Context, fpkPath string, params []WizardParam) error
+
+	// FetchWizard returns an app's install-time form definition without
+	// installing anything, so the UI can ask the same questions the native
+	// App Center does.
+	FetchWizard(ctx context.Context, fpkPath string) (*AppWizard, error)
+
+	// InstallFpkWithWizard installs a not-yet-installed app, passing the
+	// user's answers to the app's own install wizard.
+	InstallFpkWithWizard(ctx context.Context, fpkPath string, volume int, params []WizardParam) error
 }

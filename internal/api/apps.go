@@ -210,3 +210,42 @@ func (s *Server) handleReloadApps(w http.ResponseWriter, r *http.Request) {
 		Message: fmt.Sprintf("加载完成，共 %d 款应用", len(apps)),
 	})
 }
+
+// handleGetWizard returns an app's install-time form definition, so the UI can
+// ask the same questions the native App Center does before installing.
+//
+// Apps declare this in their package (fnos/wizard/install). Most have none;
+// those that do need a token, password or path would otherwise start up
+// misconfigured because the store silently accepted defaults.
+func (s *Server) handleGetWizard(w http.ResponseWriter, r *http.Request) {
+	appName := r.PathValue("appname")
+	if appName == "" {
+		writeAPIError(w, http.StatusBadRequest, "appname is required")
+		return
+	}
+	app, ok := s.getRegistryApp(appName)
+	if !ok {
+		writeAPIError(w, http.StatusNotFound, "app not found")
+		return
+	}
+	if app.Installed {
+		writeAPIError(w, http.StatusBadRequest, "应用已安装，请使用更新功能")
+		return
+	}
+	if app.DownloadURL == "" {
+		writeAPIError(w, http.StatusNotFound, "no download available")
+		return
+	}
+
+	wizard, err := s.pipeline.fetchWizard(r.Context(), app)
+	if err != nil {
+		// A wizard lookup failure must not block installing: fall back to
+		// "no wizard" so the user can still install with defaults, exactly as
+		// before this feature existed.
+		writeJSON(w, http.StatusOK, map[string]any{
+			"appname": appName, "has_wizard": false, "error": err.Error(),
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, wizard)
+}

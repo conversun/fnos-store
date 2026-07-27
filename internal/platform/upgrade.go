@@ -1,5 +1,7 @@
 package platform
 
+import "encoding/json"
+
 // UpgradeCapability reports whether in-store updates can run safely on this
 // fnOS build.
 //
@@ -49,4 +51,28 @@ var upgradeUnsafeVersions = map[string]string{
 type WizardParam struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
+}
+
+// AppWizard describes an app's install-time form, as the app itself declares
+// it in fnos/wizard/install. This is exactly what the native App Center
+// renders, so surfacing it lets the store offer the same install-time
+// customization instead of silently accepting defaults.
+//
+// Measured against sakurafrp, which declares two required password fields:
+//
+//	{"type":"password","field":"wizard_natfrp_token",
+//	 "rules":[{"required":true,"message":"请填写访问密钥"}]}
+type AppWizard struct {
+	AppName string `json:"appname"`
+	Version string `json:"version"`
+	// HasWizard is false for the majority of apps, which install with no
+	// questions asked.
+	HasWizard bool `json:"has_wizard"`
+	// Content is the app's raw form definition, passed through untouched so
+	// the UI can render whatever field types fnOS supports without this layer
+	// having to model them.
+	Content json.RawMessage `json:"content,omitempty"`
+	// InstallVolumeID is the volume the daemon picked; 0 for a fresh install
+	// where the caller chooses.
+	InstallVolumeID int `json:"install_volume_id,omitempty"`
 }

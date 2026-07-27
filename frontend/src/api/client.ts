@@ -180,8 +180,46 @@ function streamSSE(url: string, onEvent: SSECallback): SSEHandle {
   return { promise, cancel: () => controller.abort() };
 }
 
-export const installApp = (appname: string, onEvent: SSECallback): SSEHandle => {
-  return streamSSE(`/api/apps/${appname}/install`, onEvent);
+/** One answer to an app's install wizard. */
+export interface WizardParam {
+  key: string;
+  value: string;
+}
+
+/** An app's install-time form, as the app itself declares it. */
+export interface AppWizard {
+  appname: string;
+  version?: string;
+  has_wizard: boolean;
+  /** Raw fnOS wizard definition; rendered as-is so new field types keep working. */
+  content?: WizardStep[];
+  install_volume_id?: number;
+  error?: string;
+}
+
+export interface WizardStep {
+  stepTitle?: string;
+  items?: WizardItem[];
+}
+
+export interface WizardItem {
+  type: string;
+  field?: string;
+  label?: string;
+  helpText?: string;
+  initValue?: string;
+  rules?: { required?: boolean; message?: string; min?: number }[];
+}
+
+export const fetchWizard = async (appname: string): Promise<AppWizard> => {
+  const r = await fetch(`/api/apps/${appname}/wizard`);
+  if (!r.ok) return { appname, has_wizard: false };
+  return r.json();
+};
+
+export const installApp = (appname: string, onEvent: SSECallback, wizard?: WizardParam[]): SSEHandle => {
+  const qs = wizard && wizard.length ? `?wizard=${encodeURIComponent(JSON.stringify(wizard))}` : '';
+  return streamSSE(`/api/apps/${appname}/install${qs}`, onEvent);
 };
 
 export const updateApp = (appname: string, onEvent: SSECallback): SSEHandle => {

@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -68,6 +69,37 @@ func TestHandleInstallRejectsInstalledApp(t *testing.T) {
 		newServer(t, false).handleInstall(rec, req)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+		}
+	})
+}
+
+// TestParseWizardParams locks how the browser's install-wizard answers reach
+// the daemon. Malformed or absent input must degrade to "no params" — which
+// installs with defaults, exactly as before wizards existed — rather than
+// failing the install.
+func TestParseWizardParams(t *testing.T) {
+	mk := func(query string) *http.Request {
+		return httptest.NewRequest(http.MethodPost, "/api/apps/x/install?"+query, nil)
+	}
+
+	t.Run("parses answers", func(t *testing.T) {
+		q := url.Values{"wizard": {`[{"key":"wizard_token","value":"secret"}]`}}.Encode()
+		got := parseWizardParams(mk(q))
+		if len(got) != 1 || got[0].Key != "wizard_token" || got[0].Value != "secret" {
+			t.Fatalf("params = %+v, want one wizard_token=secret", got)
+		}
+	})
+
+	t.Run("absent means no params", func(t *testing.T) {
+		if got := parseWizardParams(mk("")); got != nil {
+			t.Errorf("params = %+v, want nil", got)
+		}
+	})
+
+	t.Run("malformed degrades to no params, not an error", func(t *testing.T) {
+		q := url.Values{"wizard": {`{not json`}}.Encode()
+		if got := parseWizardParams(mk(q)); got != nil {
+			t.Errorf("params = %+v, want nil so the install still proceeds", got)
 		}
 	})
 }

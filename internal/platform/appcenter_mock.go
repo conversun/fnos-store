@@ -122,6 +122,16 @@ func (m *MockAppCenter) UpgradeFpk(_ context.Context, fpkPath string, _ []Wizard
 	return m.InstallFpk(fpkPath, 1)
 }
 
+// FetchWizard reports no wizard in the dev mock: the form definitions live in
+// real fpk packages, which macOS development does not have.
+func (m *MockAppCenter) FetchWizard(_ context.Context, _ string) (*AppWizard, error) {
+	return &AppWizard{HasWizard: false}, nil
+}
+
+func (m *MockAppCenter) InstallFpkWithWizard(_ context.Context, fpkPath string, volume int, _ []WizardParam) error {
+	return m.InstallFpk(fpkPath, volume)
+}
+
 func (m *MockAppCenter) AppInstallVolume(string) (int, bool, error) {
 	return 1, true, nil
 }

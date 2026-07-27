@@ -24,5 +24,5 @@ func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.runInstallLikeOperation(w, r, "update", appname, app)
+	s.runInstallLikeOperation(w, r, "update", appname, app, nil)
 }

@@ -1,9 +1,11 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"fnos-store/internal/core"
+	"fnos-store/internal/platform"
 )
 
 func (s *Server) handleInstall(w http.ResponseWriter, r *http.Request) {
@@ -29,10 +31,27 @@ func (s *Server) handleInstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.runInstallLikeOperation(w, r, "install", appname, app)
+	// Wizard answers ride along as a query param so the SSE POST body stays
+	// free; the browser sends them from the form rendered off /wizard.
+	s.runInstallLikeOperation(w, r, "install", appname, app, parseWizardParams(r))
 }
 
-func (s *Server) runInstallLikeOperation(w http.ResponseWriter, r *http.Request, opName, appname string, app core.AppInfo) {
+// parseWizardParams reads the user's install-wizard answers from the request.
+// Absent or malformed input yields no params, which installs with defaults —
+// the behavior before wizards were supported.
+func parseWizardParams(r *http.Request) []platform.WizardParam {
+	raw := r.URL.Query().Get("wizard")
+	if raw == "" {
+		return nil
+	}
+	var params []platform.WizardParam
+	if err := json.Unmarshal([]byte(raw), &params); err != nil {
+		return nil
+	}
+	return params
+}
+
+func (s *Server) runInstallLikeOperation(w http.ResponseWriter, r *http.Request, opName, appname string, app core.AppInfo, params []platform.WizardParam) {
 	if !s.queue.TryStart(opName, appname) {
 		writeAPIError(w, http.StatusConflict, "another operation is already running")
 		return
@@ -45,7 +64,7 @@ func (s *Server) runInstallLikeOperation(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	s.pipeline.runStandard(r.Context(), stream, opName, app, s.refreshRegistry)
+	s.pipeline.runStandard(r.Context(), stream, opName, app, params, s.refreshRegistry)
 }
 
 func (s *Server) runSelfUpdate(w http.ResponseWriter, r *http.Request, app core.AppInfo) {

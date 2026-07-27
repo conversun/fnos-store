@@ -7,9 +7,10 @@ import AppList from './components/AppList';
 import AppDetailDialog from './components/AppDetailDialog';
 import ProgressOverlay from './components/ProgressOverlay';
 import SettingsDialog from './components/SettingsDialog';
+import WizardDialog from './components/WizardDialog';
 import RecommendedAppCard from './components/RecommendedAppCard';
-import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp, fetchStatus, fetchStoreUpdate, triggerStoreUpdate, reloadApps, ignoreUpdate, unignoreUpdate, fetchRecommended } from './api/client';
-import type { AppInfo, AppOperation, SSECallback, RecommendedApp } from './api/client';
+import { fetchApps, triggerCheck, installApp, updateApp, uninstallApp, fetchStatus, fetchStoreUpdate, triggerStoreUpdate, reloadApps, ignoreUpdate, unignoreUpdate, fetchRecommended, fetchWizard } from './api/client';
+import type { AppInfo, AppOperation, SSECallback, RecommendedApp, AppWizard, WizardParam } from './api/client';
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
 import { ReportFailureDialog } from './components/ReportFailureDialog';
@@ -95,6 +96,13 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<CategoryKey | null>(null);
   const [pendingUninstallApp, setPendingUninstallApp] = useState<AppInfo | null>(null);
+  // Apps can declare an install-time form (fnos/wizard/install). When one
+  // exists we ask first, then install with the answers — matching what the
+  // native App Center does. Previously the store silently accepted defaults,
+  // so an app needing a token or password came up misconfigured.
+  const [wizardApp, setWizardApp] = useState<AppInfo | null>(null);
+  const [wizardDef, setWizardDef] = useState<AppWizard | null>(null);
+  const [wizardLoading, setWizardLoading] = useState(false);
   const [detailApp, setDetailApp] = useState<AppInfo | null>(null);
   const [successInfo, setSuccessInfo] = useState<{app: AppInfo; operation: 'install' | 'update'} | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>('default');
@@ -298,13 +306,13 @@ const App: React.FC = () => {
     }
   };
 
-  const handleInstall = useCallback(async (app: AppInfo) => {
+  const runInstall = useCallback(async (app: AppInfo, wizard?: WizardParam[]) => {
     const appname = app.appname;
     // Guard: prevent double-trigger overwriting an in-flight operation's cancel handle.
     if (appOperationsRef.current.has(appname)) return;
 
     const handler = createSSEHandler(app, 'install');
-    const handle = installApp(appname, handler);
+    const handle = installApp(appname, handler, wizard);
     setAppOp(appname, {
       step: 'starting',
       progress: 0,
@@ -348,6 +356,28 @@ const App: React.FC = () => {
       }
     }
   }, [createSSEHandler, setAppOp]);
+
+  const handleInstall = useCallback(async (app: AppInfo) => {
+    if (appOperationsRef.current.has(app.appname)) return;
+    // Probe for an install form first. A lookup failure must never block
+    // installing, so anything unexpected falls through to a plain install.
+    setWizardApp(app);
+    setWizardLoading(true);
+    setWizardDef(null);
+    try {
+      const w = await fetchWizard(app.appname);
+      if (w.has_wizard && (w.content?.length ?? 0) > 0) {
+        setWizardDef(w);
+        setWizardLoading(false);
+        return;
+      }
+    } catch {
+      // ignore — fall through and install with defaults
+    }
+    setWizardApp(null);
+    setWizardLoading(false);
+    void runInstall(app);
+  }, [runInstall]);
 
   const handleUpdate = useCallback(async (app: AppInfo) => {
     const appname = app.appname;
@@ -1090,6 +1120,26 @@ const App: React.FC = () => {
             visible={settingsVisible}
             onClose={() => setSettingsVisible(false)}
             onStoreUpdate={handleStoreUpdate}
+        />
+      )}
+
+      {wizardApp && (
+        <WizardDialog
+          appDisplayName={wizardApp.display_name}
+          wizard={wizardDef}
+          loading={wizardLoading}
+          onCancel={() => {
+            setWizardApp(null);
+            setWizardDef(null);
+            setWizardLoading(false);
+          }}
+          onConfirm={(params) => {
+            const app = wizardApp;
+            setWizardApp(null);
+            setWizardDef(null);
+            setWizardLoading(false);
+            void runInstall(app, params);
+          }}
         />
       )}
       

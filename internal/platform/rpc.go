@@ -328,3 +328,94 @@ func (a *LinuxAppCenter) DaemonUpgradeAvailable() bool {
 	}
 	return false
 }
+
+// FetchWizard stages an fpk and returns its install-time form definition
+// WITHOUT installing anything.
+//
+// Staging is a read-only operation from the app's point of view: the daemon
+// unpacks the package to its download area and identifies it. Verified on a
+// live box that repeated staging leaves an installed app and its @appdata
+// untouched.
+func (a *LinuxAppCenter) FetchWizard(ctx context.Context, fpkPath string) (*AppWizard, error) {
+	staged, err := a.StageFpk(ctx, fpkPath)
+	if err != nil {
+		return nil, err
+	}
+
+	route := routeInstallInfo
+	body := map[string]any{
+		"appName":     staged.AppName,
+		"version":     staged.Version,
+		"packageType": staged.PackageType,
+		"language":    "zh-CN",
+	}
+	if staged.Installed {
+		// An installed app answers on the update route; the install route
+		// would reject it.
+		route = routeUpdateInfo
+		body = map[string]any{
+			"appName":       staged.AppName,
+			"updateVersion": staged.Version,
+			"packageType":   staged.PackageType,
+			"language":      "zh-CN",
+		}
+	}
+
+	var info infoResponse
+	if err := daemonCall(ctx, route, body, &info); err != nil {
+		return nil, fmt.Errorf("读取安装向导失败: %w", err)
+	}
+	w := info.WizardInfo
+	return &AppWizard{
+		AppName:         staged.AppName,
+		Version:         staged.Version,
+		HasWizard:       w.HasWizard,
+		Content:         w.WizardContent,
+		InstallVolumeID: w.InstalledVolumeID,
+	}, nil
+}
+
+// InstallFpkWithWizard installs a NOT-YET-INSTALLED app through the daemon,
+// passing the user's answers to the app's install wizard.
+//
+// This is what makes third-party installs equivalent to the native App
+// Center's: apps that need a token, password or path can ask for it instead of
+// silently starting up misconfigured. The daemon enforces the app's own
+// required-field rules and answers 19000 naming any field left empty.
+func (a *LinuxAppCenter) InstallFpkWithWizard(ctx context.Context, fpkPath string, volume int, params []WizardParam) error {
+	staged, err := a.StageFpk(ctx, fpkPath)
+	if err != nil {
+		return err
+	}
+	if staged.Installed {
+		// Routing an installed app here would make the daemon treat it as a
+		// fresh install; callers must use UpgradeFpk, which preserves data.
+		return fmt.Errorf("%s 已安装，请使用更新功能", staged.AppName)
+	}
+	if volume <= 0 {
+		return fmt.Errorf("未指定安装存储卷")
+	}
+	if params == nil {
+		params = []WizardParam{}
+	}
+
+	var task struct {
+		TaskID string `json:"taskId"`
+	}
+	if err := daemonCall(ctx, routeInstallTask, map[string]any{
+		"appName":     staged.AppName,
+		"version":     staged.Version,
+		"packageType": staged.PackageType,
+		"systemParameters": map[string]any{
+			"agreedToProtocol": true,
+			"installVolumeID":  volume,
+			"dataVolumeId":     volume,
+			"immediateStart":   false,
+		},
+		"customParameters": params,
+		"language":         "zh-CN",
+	}, &task); err != nil {
+		return fmt.Errorf("安装失败: %w", err)
+	}
+	return a.waitTask(ctx, task.TaskID, "安装")
+}

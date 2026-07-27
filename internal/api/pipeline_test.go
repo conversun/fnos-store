@@ -37,12 +37,16 @@ type stubAppCenter struct {
 	setVolIgnored bool
 	getVolErr     error
 
-	nCheck        int32
-	nList         int32
-	nInstallFpk   int32
-	nInstallLocal int32
-	nUpgradeFpk   int32
-	upgradeErr    error
+	nCheck           int32
+	nList            int32
+	nInstallFpk      int32
+	nInstallLocal    int32
+	nUpgradeFpk      int32
+	nInstallWizard   int32
+	upgradeErr       error
+	installWizardErr error
+	wizard           *platform.AppWizard
+	lastParams       []platform.WizardParam
 }
 
 type stubCheckResult struct {
@@ -88,6 +92,16 @@ func (s *stubAppCenter) DefaultVolume() (int, error) {
 	return s.curVol, nil
 }
 func (s *stubAppCenter) ListVolumes() ([]platform.VolumeInfo, error) { return s.volumes, nil }
+func (s *stubAppCenter) FetchWizard(_ context.Context, _ string) (*platform.AppWizard, error) {
+	return s.wizard, nil
+}
+
+func (s *stubAppCenter) InstallFpkWithWizard(_ context.Context, _ string, _ int, params []platform.WizardParam) error {
+	atomic.AddInt32(&s.nInstallWizard, 1)
+	s.lastParams = params
+	return s.installWizardErr
+}
+
 func (s *stubAppCenter) UpgradeFpk(_ context.Context, _ string, _ []platform.WizardParam) error {
 	atomic.AddInt32(&s.nUpgradeFpk, 1)
 	return s.upgradeErr

@@ -303,6 +303,15 @@ func (p *installPipeline) upgradeFpk(ctx context.Context, fpkPath string) error 
 	})
 }
 
+// installFpkWithWizard installs through the daemon so the app's own install
+// wizard answers reach it. Falling back to install-local on failure would
+// silently drop those answers, leaving the app misconfigured.
+func (p *installPipeline) installFpkWithWizard(ctx context.Context, fpkPath string, volume int, params []platform.WizardParam) error {
+	return p.queue.WithCLI(func() error {
+		return p.ac.InstallFpkWithWizard(ctx, fpkPath, volume, params)
+	})
+}
+
 func (p *installPipeline) installFpk(fpkPath string, volume int) error {
 	return p.queue.WithCLI(func() error {
 		return p.ac.InstallFpk(fpkPath, volume)
@@ -708,7 +717,7 @@ func normalizeImageForPull(image, mirror string, multiRegistry bool) string {
 	return image
 }
 
-func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, opName string, app core.AppInfo, refreshFn func(context.Context) error) {
+func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, opName string, app core.AppInfo, params []platform.WizardParam, refreshFn func(context.Context) error) {
 	// Guard first: refuse before downloading, so an affected system never
 	// reaches the uninstall-then-failed-reinstall path.
 	if opName == "update" {
@@ -752,9 +761,14 @@ func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, op
 	// @appdata and can roll back. install-local (used for fresh installs) is
 	// uninstall-then-reinstall and destroys the app when the reinstall fails
 	// — conversun/fnos-apps#189. A failure here must NEVER fall back to it.
+	// Fresh installs also go through the daemon when it is reachable, so an
+	// app that declares an install wizard can actually receive the user's
+	// answers. install-local has no way to pass them.
 	installStep := func() error { return p.installFpk(fpkPath, volume) }
 	if opName == "update" {
 		installStep = func() error { return p.upgradeFpk(ctx, fpkPath) }
+	} else if len(params) > 0 {
+		installStep = func() error { return p.installFpkWithWizard(ctx, fpkPath, volume, params) }
 	}
 
 	if err := runWithVirtualProgress(ctx, stream, "installing", "正在安装...", installStep); err != nil {
@@ -871,4 +885,56 @@ func (p *installPipeline) runSelfUpdate(ctx context.Context, stream *sseStream, 
 	// reads it asynchronously after cmd.Start() returns, and fnOS will kill
 	// this process before any deferred cleanup could run. /tmp is wiped on
 	// reboot.
+}
+
+// downloadFpkQuiet fetches an fpk without an SSE stream, for callers that are
+// plain request/response (the wizard lookup) rather than a long operation.
+func (p *installPipeline) downloadFpkQuiet(ctx context.Context, app core.AppInfo) (string, error) {
+	if p.downloads == nil {
+		return "", errors.New("下载器未配置")
+	}
+	fileName := path.Base(app.DownloadURL)
+	if fileName == "." || fileName == "/" || fileName == "" {
+		return "", errors.New("下载地址无效")
+	}
+
+	var cfg config.Config
+	if p.configMgr != nil {
+		cfg = p.configMgr.Get()
+	} else {
+		cfg = config.Config{Mirror: config.DefaultMirror, DockerMirror: config.DefaultDockerMirror}
+	}
+	prefixes := config.GitHubFallbackPrefixes(cfg.Mirror, cfg)
+	urls := make([]string, 0, len(prefixes))
+	for _, prefix := range prefixes {
+		urls = append(urls, prefix+app.DownloadURL)
+	}
+
+	return p.downloads.Download(ctx, core.DownloadRequest{
+		URLs:     urls,
+		FileName: fileName,
+		AppName:  app.AppName,
+	}, nil)
+}
+
+// fetchWizard downloads an app's package and reads the install-time form it
+// declares, without installing anything.
+//
+// This does cost a download that the subsequent install repeats — Download()
+// has no cache check. That is acceptable here because it only runs for apps
+// that declare a wizard, and those packages are small: of the 18 wizard apps
+// in the catalogue 17 ship a fpk under 1 MB (they are docker apps whose images
+// are pulled separately), and only feigram is large at ~43 MB. Adding a cache
+// to the shared downloader for this one caller would risk serving a stale
+// package to every install path.
+//
+// The file is removed after reading so a wizard peek never leaves a package
+// behind for an install the user then cancels.
+func (p *installPipeline) fetchWizard(ctx context.Context, app core.AppInfo) (*platform.AppWizard, error) {
+	fpkPath, err := p.downloadFpkQuiet(ctx, app)
+	if err != nil {
+		return nil, err
+	}
+	defer os.Remove(fpkPath)
+	return p.ac.FetchWizard(ctx, fpkPath)
 }
