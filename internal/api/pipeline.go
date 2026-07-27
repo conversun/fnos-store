@@ -294,6 +294,15 @@ func (p *installPipeline) setDefaultVolume(volume int) error {
 	})
 }
 
+// upgradeFpk drives the daemon's data-preserving upgrade. It deliberately has
+// no install-local fallback: a failed RPC upgrade leaves the app untouched,
+// whereas falling back would destroy it.
+func (p *installPipeline) upgradeFpk(ctx context.Context, fpkPath string) error {
+	return p.queue.WithCLI(func() error {
+		return p.ac.UpgradeFpk(ctx, fpkPath, nil)
+	})
+}
+
 func (p *installPipeline) installFpk(fpkPath string, volume int) error {
 	return p.queue.WithCLI(func() error {
 		return p.ac.InstallFpk(fpkPath, volume)
@@ -739,16 +748,16 @@ func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, op
 		return
 	}
 
+	// Updates go through the daemon's own upgrade channel, which preserves
+	// @appdata and can roll back. install-local (used for fresh installs) is
+	// uninstall-then-reinstall and destroys the app when the reinstall fails
+	// — conversun/fnos-apps#189. A failure here must NEVER fall back to it.
+	installStep := func() error { return p.installFpk(fpkPath, volume) }
 	if opName == "update" {
-		if err := p.setDefaultVolume(volume); err != nil {
-			_ = stream.sendError(fmt.Sprintf("无法锁定安装目标卷 vol%d，已中止更新以保护现有数据: %v", volume, err))
-			return
-		}
+		installStep = func() error { return p.upgradeFpk(ctx, fpkPath) }
 	}
 
-	if err := runWithVirtualProgress(ctx, stream, "installing", "正在安装...", func() error {
-		return p.installFpk(fpkPath, volume)
-	}); err != nil {
+	if err := runWithVirtualProgress(ctx, stream, "installing", "正在安装...", installStep); err != nil {
 		_ = stream.sendError(err.Error())
 		return
 	}
@@ -771,11 +780,17 @@ func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, op
 		return
 	}
 
-	if err := runWithVirtualProgress(ctx, stream, "starting", "正在启动...", func() error {
-		return p.startApp(app.AppName)
-	}); err != nil {
-		_ = stream.sendError(err.Error())
-		return
+	// Only fresh installs need an explicit start. The daemon's upgrade already
+	// restores the app to its previous running state, so starting again yields
+	// "[Info]Application [x] is already started." — which the CLI reports as a
+	// failure, turning a successful upgrade into a user-visible error.
+	if opName != "update" {
+		if err := runWithVirtualProgress(ctx, stream, "starting", "正在启动...", func() error {
+			return p.startApp(app.AppName)
+		}); err != nil {
+			_ = stream.sendError(err.Error())
+			return
+		}
 	}
 
 	if p.cacheStore != nil && app.ReleaseTag != "" {

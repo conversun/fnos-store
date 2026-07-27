@@ -41,6 +41,8 @@ type stubAppCenter struct {
 	nList         int32
 	nInstallFpk   int32
 	nInstallLocal int32
+	nUpgradeFpk   int32
+	upgradeErr    error
 }
 
 type stubCheckResult struct {
@@ -86,6 +88,11 @@ func (s *stubAppCenter) DefaultVolume() (int, error) {
 	return s.curVol, nil
 }
 func (s *stubAppCenter) ListVolumes() ([]platform.VolumeInfo, error) { return s.volumes, nil }
+func (s *stubAppCenter) UpgradeFpk(_ context.Context, _ string, _ []platform.WizardParam) error {
+	atomic.AddInt32(&s.nUpgradeFpk, 1)
+	return s.upgradeErr
+}
+
 func (s *stubAppCenter) UpgradeCapability() platform.UpgradeCapability {
 	if s.upgradeBlocked {
 		return platform.UpgradeCapability{Allowed: false, PlatformVersion: "1.2.0203", Reason: "该 fnOS 版本更新会删除应用数据"}
@@ -800,3 +807,44 @@ func TestUpgradeGuardBlocksDestructivePath(t *testing.T) {
 		}
 	})
 }
+
+// TestUpdateUsesDaemonUpgradeNotInstallLocal locks the routing that keeps an
+// update from destroying the app.
+//
+// fnOS has two upgrade mechanisms with opposite outcomes: the daemon's RPC
+// upgrade preserves @appdata and can roll back, while install-local is
+// uninstall-then-reinstall and on fnOS 1.2.0203 always loses the app. So an
+// update must reach UpgradeFpk, and a FAILED update must NOT retry through
+// InstallFpk — falling back would turn a clean failure into data loss
+// (conversun/fnos-apps#189).
+func TestUpdateUsesDaemonUpgradeNotInstallLocal(t *testing.T) {
+	t.Run("update routes to UpgradeFpk", func(t *testing.T) {
+		stub := &stubAppCenter{}
+		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
+		if err := p.upgradeFpk(context.Background(), "/tmp/x.fpk"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if n := atomic.LoadInt32(&stub.nUpgradeFpk); n != 1 {
+			t.Errorf("UpgradeFpk called %d times, want 1", n)
+		}
+		if n := atomic.LoadInt32(&stub.nInstallFpk); n != 0 {
+			t.Errorf("InstallFpk called %d times; the destructive path must not run for updates", n)
+		}
+	})
+
+	t.Run("a failed upgrade does not fall back to install-local", func(t *testing.T) {
+		stub := &stubAppCenter{upgradeErr: errSimulatedUpgrade}
+		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
+		if err := p.upgradeFpk(context.Background(), "/tmp/x.fpk"); err == nil {
+			t.Fatal("expected the upgrade error to surface")
+		}
+		if n := atomic.LoadInt32(&stub.nInstallFpk); n != 0 {
+			t.Errorf("InstallFpk called %d times after a failed upgrade; that would destroy the app", n)
+		}
+		if n := atomic.LoadInt32(&stub.nInstallLocal); n != 0 {
+			t.Errorf("InstallLocal called %d times after a failed upgrade", n)
+		}
+	})
+}
+
+var errSimulatedUpgrade = errors.New("simulated upgrade failure")

@@ -1,5 +1,7 @@
 package platform
 
+import "context"
+
 // InstalledApp represents an app installed via appcenter-cli.
 type InstalledApp struct {
 	AppName     string
@@ -69,4 +71,10 @@ type AppCenter interface {
 	// installed app without destroying it. Some builds cannot — see
 	// upgrade.go.
 	UpgradeCapability() UpgradeCapability
+
+	// UpgradeFpk upgrades an ALREADY-INSTALLED app in place, preserving its
+	// data. This is deliberately separate from InstallFpk: InstallFpk goes
+	// through install-local, which implements an upgrade as
+	// uninstall-then-reinstall and destroys the app when the reinstall fails.
+	UpgradeFpk(ctx context.Context, fpkPath string, params []WizardParam) error
 }

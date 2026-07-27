@@ -39,3 +39,14 @@ var upgradeUnsafeVersions = map[string]string{
 	"1.2.0203": "该 fnOS 版本的应用更新通道存在已确认的数据删除风险（错误 10237）：" +
 		"系统会先卸载旧版再安装新版，而安装步骤必定失败，导致应用与其数据一并丢失。",
 }
+
+// WizardParam is one answer to an app's install wizard.
+//
+// The daemon requires exactly {"key":..,"value":..}; paramKey/paramValue and
+// name/value are both rejected with code 10030, and an empty list fails with
+// 19000 naming the missing field. Measured against sakurafrp, which declares
+// two required password fields.
+type WizardParam struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}

@@ -3,6 +3,7 @@
 package platform
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -113,6 +114,12 @@ func (m *MockAppCenter) ListVolumes() ([]VolumeInfo, error) {
 		{Index: 1, Path: "/vol1", TotalBytes: 1000204886016, FreeBytes: 536870912000},
 		{Index: 2, Path: "/vol2", TotalBytes: 2000398934016, FreeBytes: 1503238553600},
 	}, nil
+}
+
+// UpgradeFpk in the mock just reuses the install path; the destructive
+// behavior it guards against only exists on real fnOS.
+func (m *MockAppCenter) UpgradeFpk(_ context.Context, fpkPath string, _ []WizardParam) error {
+	return m.InstallFpk(fpkPath, 1)
 }
 
 func (m *MockAppCenter) AppInstallVolume(string) (int, bool, error) {
