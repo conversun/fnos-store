@@ -15,6 +15,8 @@ interface AppListProps {
   filterType?: string;
   appOperations?: Map<string, AppOperation>;
   searchQuery?: string;
+  /** false when this fnOS build cannot update apps without destroying them. */
+  upgradeAllowed?: boolean;
 }
 
 const getEmptyMessage = (filterType?: string) => {
@@ -28,7 +30,7 @@ const getEmptyMessage = (filterType?: string) => {
   }
 };
 
-const AppList: React.FC<AppListProps> = ({ apps, loading, onInstall, onUpdate, onUninstall, onDetail, onCancelOp, filterType, appOperations, searchQuery }) => {
+const AppList: React.FC<AppListProps> = ({ apps, loading, onInstall, onUpdate, onUninstall, onDetail, onCancelOp, filterType, appOperations, searchQuery, upgradeAllowed }) => {
   if (loading) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -76,6 +78,7 @@ const AppList: React.FC<AppListProps> = ({ apps, loading, onInstall, onUpdate, o
           onUninstall={onUninstall}
           onDetail={onDetail}
           onCancelOp={onCancelOp}
+          upgradeAllowed={upgradeAllowed}
         />
       ))}
     </div>

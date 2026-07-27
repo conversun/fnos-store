@@ -57,6 +57,10 @@ type SortKey = 'default' | 'downloads' | 'name' | 'updated';
 
 const App: React.FC = () => {
   const [apps, setApps] = useState<AppInfo[]>([]);
+  // false on fnOS builds whose update path destroys the app (see backend
+  // platform.UpgradeCapability). Surfaced so the UI does not offer an update
+  // button that can only ever fail.
+  const [upgradeAllowed, setUpgradeAllowed] = useState(true);
   const [loadStatus, setLoadStatus] = useState<'loading' | 'loaded' | 'retrying' | 'failed'>('loading');
   const [loadMessages, setLoadMessages] = useState<{text: string; status: 'info' | 'success' | 'error'}[]>([]);
   const [checking, setChecking] = useState<boolean>(false);
@@ -173,6 +177,7 @@ const App: React.FC = () => {
     try {
       const data = await fetchApps();
       setApps(data.apps);
+      setUpgradeAllowed(data.upgrade_allowed !== false);
       setLastCheck(data.last_check);
       if (data.apps.length > 0) {
         setLoadStatus('loaded');
@@ -1014,6 +1019,7 @@ const App: React.FC = () => {
                onUninstall={handleUninstall}
                onDetail={setDetailApp}
                onCancelOp={handleCancelOp}
+               upgradeAllowed={upgradeAllowed}
                filterType={activeFilter}
                appOperations={appOperations}
                searchQuery={searchQuery}

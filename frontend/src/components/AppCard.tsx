@@ -21,12 +21,14 @@ interface AppCardProps {
   operation?: AppOperation;
   onInstall: (app: AppInfo) => void;
   onUpdate: (app: AppInfo) => void;
+  /** false when this fnOS build cannot update apps without destroying them. */
+  upgradeAllowed?: boolean;
   onUninstall?: (app: AppInfo) => void;
   onDetail?: (app: AppInfo) => void;
   onCancelOp?: (app: AppInfo) => void;
 }
 
-const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, onDetail, onCancelOp }) => {
+const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, onDetail, onCancelOp, upgradeAllowed = true }) => {
   const isInstalled = app.installed;
   const canUpdate = isInstalled && app.has_update;
 
@@ -206,10 +208,12 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
                   size="sm"
                   onClick={() => onUpdate(app)}
                   variant="outline"
-                  className="rounded-full px-3.5 h-7 text-xs font-medium border-primary text-primary hover:bg-primary/10"
+                  disabled={!upgradeAllowed}
+                  title={upgradeAllowed ? undefined : '当前 fnOS 版本的更新通道会删除应用数据，请在系统应用中心手动安装 fpk'}
+                  className="rounded-full px-3.5 h-7 text-xs font-medium border-primary text-primary hover:bg-primary/10 disabled:border-muted disabled:text-muted-foreground"
                 >
                   <RefreshCw className="mr-1 h-3.5 w-3.5" />
-                  更新
+                  {upgradeAllowed ? '更新' : '需手动更新'}
                 </Button>
               ) : null}
             </div>

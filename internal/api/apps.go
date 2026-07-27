@@ -68,9 +68,12 @@ func (s *Server) handleListApps(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	upgradeCap := s.ac.UpgradeCapability()
 	writeJSON(w, http.StatusOK, appsListResponse{
-		Apps:      respApps,
-		LastCheck: formatTimestamp(s.getLastCheck()),
+		UpgradeAllowed:       upgradeCap.Allowed,
+		UpgradeBlockedReason: upgradeCap.Reason,
+		Apps:                 respApps,
+		LastCheck:            formatTimestamp(s.getLastCheck()),
 	})
 }
 

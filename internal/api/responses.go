@@ -27,6 +27,13 @@ type appResponse struct {
 }
 
 type appsListResponse struct {
+	// UpgradeAllowed is false on fnOS builds where an in-store update would
+	// destroy the app (see platform.UpgradeCapability). The UI uses it to
+	// point users at manual install UP FRONT, instead of offering an update
+	// button that always fails.
+	UpgradeAllowed       bool   `json:"upgrade_allowed"`
+	UpgradeBlockedReason string `json:"upgrade_blocked_reason,omitempty"`
+
 	Apps      []appResponse `json:"apps"`
 	LastCheck string        `json:"last_check"`
 }

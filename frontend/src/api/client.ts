@@ -25,6 +25,9 @@ export interface AppInfo {
 export interface AppsResponse {
   apps: AppInfo[];
   last_check: string;
+  /** false on fnOS builds where an in-store update would destroy the app. */
+  upgrade_allowed?: boolean;
+  upgrade_blocked_reason?: string;
 }
 
 export interface RecommendedApp {
