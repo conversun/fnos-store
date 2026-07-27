@@ -27,8 +27,9 @@ type stubAppCenter struct {
 	appVolErr   error
 	volumes     []platform.VolumeInfo
 
-	setVolCalls []int
-	setVolErr   error
+	setVolCalls    []int
+	setVolErr      error
+	upgradeBlocked bool
 	// curVol is the volume the stub reports from DefaultVolume(). A successful
 	// SetDefaultVolume updates it; setVolIgnored models the real fnOS defect
 	// where the setter exits 0 but the value never changes.
@@ -36,8 +37,10 @@ type stubAppCenter struct {
 	setVolIgnored bool
 	getVolErr     error
 
-	nCheck int32
-	nList  int32
+	nCheck        int32
+	nList         int32
+	nInstallFpk   int32
+	nInstallLocal int32
 }
 
 type stubCheckResult struct {
@@ -60,12 +63,19 @@ func (s *stubAppCenter) List() ([]platform.InstalledApp, error) {
 	return s.listResult, s.listErr
 }
 
-func (s *stubAppCenter) Status(string) (string, error)        { return "", nil }
-func (s *stubAppCenter) InstallFpk(string, int) error         { return nil }
-func (s *stubAppCenter) InstallLocal(string, int, bool) error { return nil }
-func (s *stubAppCenter) Uninstall(string) error               { return nil }
-func (s *stubAppCenter) Start(string) error                   { return nil }
-func (s *stubAppCenter) Stop(string) error                    { return nil }
+func (s *stubAppCenter) Status(string) (string, error) { return "", nil }
+func (s *stubAppCenter) InstallFpk(string, int) error {
+	atomic.AddInt32(&s.nInstallFpk, 1)
+	return nil
+}
+
+func (s *stubAppCenter) InstallLocal(string, int, bool) error {
+	atomic.AddInt32(&s.nInstallLocal, 1)
+	return nil
+}
+func (s *stubAppCenter) Uninstall(string) error { return nil }
+func (s *stubAppCenter) Start(string) error     { return nil }
+func (s *stubAppCenter) Stop(string) error      { return nil }
 func (s *stubAppCenter) DefaultVolume() (int, error) {
 	if s.getVolErr != nil {
 		return 0, s.getVolErr
@@ -76,6 +86,13 @@ func (s *stubAppCenter) DefaultVolume() (int, error) {
 	return s.curVol, nil
 }
 func (s *stubAppCenter) ListVolumes() ([]platform.VolumeInfo, error) { return s.volumes, nil }
+func (s *stubAppCenter) UpgradeCapability() platform.UpgradeCapability {
+	if s.upgradeBlocked {
+		return platform.UpgradeCapability{Allowed: false, PlatformVersion: "1.2.0203", Reason: "该 fnOS 版本更新会删除应用数据"}
+	}
+	return platform.UpgradeCapability{Allowed: true, PlatformVersion: "test"}
+}
+
 func (s *stubAppCenter) AppInstallVolume(string) (int, bool, error) {
 	return s.appVolIdx, s.appVolFound, s.appVolErr
 }
@@ -449,6 +466,23 @@ func TestSetDefaultVolume(t *testing.T) {
 		}
 	})
 
+	// Single-volume systems get NO exemption here. Relocation is impossible
+	// with one volume, but the pin verification is not what protects them —
+	// on fnOS 1.2.0203 the update destroys the app regardless (error 10237),
+	// so the refusal now lives in requireSafeUpgrade(). Skipping verification
+	// here would only have let those users reach the destroyer sooner.
+	t.Run("single volume does not exempt the pin verification", func(t *testing.T) {
+		stub := &stubAppCenter{
+			curVol:        -1, // broken getter, as measured on fnOS 1.2.0203
+			setVolIgnored: true,
+			volumes:       []platform.VolumeInfo{{Index: 1, Path: "/vol1"}},
+		}
+		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
+		if err := p.setDefaultVolume(1); err == nil {
+			t.Fatal("expected the pin verification to still fail closed")
+		}
+	})
+
 	t.Run("fails closed when the value cannot be read back", func(t *testing.T) {
 		stub := &stubAppCenter{getVolErr: errors.New("read boom")}
 		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
@@ -706,6 +740,63 @@ func TestVerifyPayloadLanded(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "vol2") {
 			t.Errorf("error %q should name the actual volume", err.Error())
+		}
+	})
+}
+
+// TestUpgradeGuardBlocksDestructivePath locks the refusal added after a user
+// lost apps on fnOS 1.2.0203 (conversun/fnos-apps#189).
+//
+// fnOS has no data-preserving upgrade command: `install-fpk` refuses an
+// already-installed app outright, and `install-local` implements an upgrade as
+// uninstall-then-reinstall whose reinstall fails with error 10237 on that
+// build. Reproduced twice on a live box — gopeed went from running to gone,
+// program directory AND @appdata deleted.
+//
+// The guard therefore has to fire BEFORE anything is downloaded or installed,
+// because nothing downstream can undo the uninstall.
+func TestUpgradeGuardBlocksDestructivePath(t *testing.T) {
+	newPipeline := func(blocked bool) (*installPipeline, *stubAppCenter) {
+		stub := &stubAppCenter{
+			upgradeBlocked: blocked,
+			appVolIdx:      1,
+			appVolFound:    true,
+			volumes:        []platform.VolumeInfo{{Index: 1, Path: "/vol1"}},
+			checkScript:    []stubCheckResult{{installed: true}},
+		}
+		return &installPipeline{queue: NewOperationQueue(), ac: stub}, stub
+	}
+
+	t.Run("update is refused before any destructive call", func(t *testing.T) {
+		p, stub := newPipeline(true)
+		if err := p.requireSafeUpgrade(); err == nil {
+			t.Fatal("expected the update to be refused on an unsafe build")
+		}
+		if n := atomic.LoadInt32(&stub.nInstallLocal); n != 0 {
+			t.Errorf("InstallLocal called %d times; must never run when blocked", n)
+		}
+		if n := atomic.LoadInt32(&stub.nInstallFpk); n != 0 {
+			t.Errorf("InstallFpk called %d times; must never run when blocked", n)
+		}
+	})
+
+	t.Run("refusal explains the manual route", func(t *testing.T) {
+		p, _ := newPipeline(true)
+		err := p.requireSafeUpgrade()
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if !strings.Contains(err.Error(), "删除") {
+			t.Errorf("error %q should explain the data-loss risk", err.Error())
+		}
+	})
+
+	// Fresh installs stay available: there is no existing app to destroy, and
+	// install-fpk on a not-installed app works fine on the affected build.
+	t.Run("safe builds are unaffected", func(t *testing.T) {
+		p, _ := newPipeline(false)
+		if err := p.requireSafeUpgrade(); err != nil {
+			t.Fatalf("update must proceed on a safe build, got: %v", err)
 		}
 	})
 }

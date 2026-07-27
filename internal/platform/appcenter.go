@@ -64,4 +64,9 @@ type AppCenter interface {
 	// determined. Updates MUST pin to this volume so an app is never relocated
 	// off its existing data.
 	AppInstallVolume(appname string) (int, bool, error)
+
+	// UpgradeCapability reports whether this fnOS build can update an
+	// installed app without destroying it. Some builds cannot — see
+	// upgrade.go.
+	UpgradeCapability() UpgradeCapability
 }

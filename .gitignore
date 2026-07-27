@@ -5,3 +5,4 @@ var/
 .DS_Store
 store-server-linux-*
 server
+.omo/

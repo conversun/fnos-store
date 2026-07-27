@@ -136,6 +136,22 @@ func (p *installPipeline) downloadFpk(ctx context.Context, stream *sseStream, ap
 	return fpkPath, err
 }
 
+// requireSafeUpgrade refuses an update on fnOS builds where the upgrade path
+// is known to destroy the app.
+//
+// This must run BEFORE anything is downloaded or written, because the
+// destructive step is irreversible: install-local uninstalls the app first,
+// the reinstall then fails, and there is no retained copy of the old version
+// to restore. verifyPayloadLanded detects the loss afterwards but cannot undo
+// it (conversun/fnos-apps#189).
+func (p *installPipeline) requireSafeUpgrade() error {
+	cap := p.ac.UpgradeCapability()
+	if cap.Allowed {
+		return nil
+	}
+	return errors.New(cap.Reason)
+}
+
 // resolveVolume picks the volume for a FRESH install: the user's explicit
 // choice if set, otherwise fnOS's default.
 //
@@ -272,7 +288,7 @@ func (p *installPipeline) setDefaultVolume(volume int) error {
 			return fmt.Errorf("设置后无法读回默认安装卷: %w", err)
 		}
 		if got != volume {
-			return fmt.Errorf("默认安装卷设置未生效（请求 vol%d，实际仍为 vol%d）", volume, got)
+			return fmt.Errorf("默认安装卷设置未生效（请求 vol%d，实际仍为 vol%d）。当前系统有多个存储空间，为避免应用被迁移到其他硬盘导致数据丢失，已中止本次更新。请使用飞牛系统自带应用中心手动更新", volume, got)
 		}
 		return nil
 	})
@@ -684,6 +700,15 @@ func normalizeImageForPull(image, mirror string, multiRegistry bool) string {
 }
 
 func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, opName string, app core.AppInfo, refreshFn func(context.Context) error) {
+	// Guard first: refuse before downloading, so an affected system never
+	// reaches the uninstall-then-failed-reinstall path.
+	if opName == "update" {
+		if err := p.requireSafeUpgrade(); err != nil {
+			_ = stream.sendError(err.Error())
+			return
+		}
+	}
+
 	fpkPath, err := p.downloadFpk(ctx, stream, app)
 	if err != nil {
 		_ = stream.sendError(err.Error())
@@ -764,6 +789,13 @@ func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, op
 }
 
 func (p *installPipeline) runSelfUpdate(ctx context.Context, stream *sseStream, app core.AppInfo) {
+	// Self-update is the riskiest path: the child is detached and this process
+	// is killed partway through, so a failure cannot even be reported.
+	if err := p.requireSafeUpgrade(); err != nil {
+		_ = stream.sendError(err.Error())
+		return
+	}
+
 	fpkPath, err := p.downloadFpk(ctx, stream, app)
 	if err != nil {
 		_ = stream.sendError(err.Error())
