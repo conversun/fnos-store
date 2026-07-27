@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"fnos-store/internal/config"
 	"fnos-store/internal/platform"
 )
 
@@ -453,6 +454,91 @@ func TestSetDefaultVolume(t *testing.T) {
 		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
 		if err := p.setDefaultVolume(2); err == nil {
 			t.Fatal("expected error when read-back fails, got nil")
+		}
+	})
+}
+
+// TestResolveVolume locks the fresh-install volume choice on a system whose
+// fnOS default-volume getter is broken. Measured on fnOS 1.2.0203: the getter
+// returns 0 while the daemon's own DB holds 1, and vol0 does not exist.
+//
+// Dead-ending the user there is bad UX — the Settings default reads "系统默认",
+// which looks correct and gives no hint it is the thing failing. valfar7 hit
+// exactly that on 1.7.14 (conversun/fnos-apps#189). When only one volume is
+// mounted there is no ambiguity, so fall back to it instead of demanding a
+// choice the user cannot know they must make.
+func TestResolveVolume(t *testing.T) {
+	t.Run("uses the configured volume when set", func(t *testing.T) {
+		stub := &stubAppCenter{curVol: 9, volumes: []platform.VolumeInfo{{Index: 1, Path: "/vol1"}}}
+		p := &installPipeline{
+			queue:     NewOperationQueue(),
+			ac:        stub,
+			configMgr: config.NewManager(t.TempDir()),
+		}
+		cfg, err := p.configMgr.LoadConfig()
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg.InstallVolume = 2
+		if err := p.configMgr.SaveConfig(cfg); err != nil {
+			t.Fatal(err)
+		}
+		got, err := p.resolveVolume()
+		if err != nil || got != 2 {
+			t.Fatalf("resolveVolume() = (%d, %v), want (2, nil)", got, err)
+		}
+	})
+
+	t.Run("accepts a usable fnOS default", func(t *testing.T) {
+		stub := &stubAppCenter{
+			curVol:  2,
+			volumes: []platform.VolumeInfo{{Index: 1, Path: "/vol1"}, {Index: 2, Path: "/vol2"}},
+		}
+		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
+		got, err := p.resolveVolume()
+		if err != nil || got != 2 {
+			t.Fatalf("resolveVolume() = (%d, %v), want (2, nil)", got, err)
+		}
+	})
+
+	// THE regression: getter says vol0, only /vol1 exists.
+	t.Run("falls back to the only mounted volume when the default is unusable", func(t *testing.T) {
+		stub := &stubAppCenter{curVol: -1, volumes: []platform.VolumeInfo{{Index: 1, Path: "/vol1"}}}
+		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
+		got, err := p.resolveVolume()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != 1 {
+			t.Errorf("volume = %d, want 1 (the only mounted volume)", got)
+		}
+	})
+
+	// With several volumes there is no safe guess — ask, and say where to look.
+	t.Run("asks the user when several volumes exist and the default is unusable", func(t *testing.T) {
+		stub := &stubAppCenter{
+			curVol:  -1,
+			volumes: []platform.VolumeInfo{{Index: 1, Path: "/vol1"}, {Index: 2, Path: "/vol2"}},
+		}
+		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
+		_, err := p.resolveVolume()
+		if err == nil {
+			t.Fatal("expected an error when the choice is ambiguous, got nil")
+		}
+		if !strings.Contains(err.Error(), "应用安装位置") {
+			t.Errorf("error %q should name the settings field to change", err.Error())
+		}
+	})
+
+	t.Run("falls back when the getter itself fails", func(t *testing.T) {
+		stub := &stubAppCenter{
+			getVolErr: errors.New("cli boom"),
+			volumes:   []platform.VolumeInfo{{Index: 1, Path: "/vol1"}},
+		}
+		p := &installPipeline{queue: NewOperationQueue(), ac: stub}
+		got, err := p.resolveVolume()
+		if err != nil || got != 1 {
+			t.Fatalf("resolveVolume() = (%d, %v), want (1, nil)", got, err)
 		}
 	})
 }

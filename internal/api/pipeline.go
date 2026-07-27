@@ -141,10 +141,11 @@ func (p *installPipeline) downloadFpk(ctx context.Context, stream *sseStream, ap
 //
 // The CLI's default-volume getter is unreliable — on fnOS 1.2.0203 it returns
 // 0 while the daemon's own database holds a valid index — and vol0 does not
-// exist, so the value is validated against the mounted volumes. When it is
-// unusable the error names the one lever that actually works (picking a disk
-// in settings) instead of letting the install fail later with a generic
-// "volume unavailable" the user cannot act on.
+// exist. Rather than dead-ending the user on a default they never chose and
+// cannot see is broken, an unusable value falls back to the single mounted
+// volume when there is exactly one. Only a genuinely ambiguous system (several
+// volumes, no usable default) asks the user to pick, because there is no safe
+// way to guess which disk their apps belong on.
 func (p *installPipeline) resolveVolume() (int, error) {
 	if p.configMgr != nil {
 		if v := p.configMgr.Get().InstallVolume; v > 0 {
@@ -157,30 +158,44 @@ func (p *installPipeline) resolveVolume() (int, error) {
 		volume, e = p.ac.DefaultVolume()
 		return e
 	})
+	mounted, listErr := p.mountedVolumes()
 	if err != nil {
+		// The getter itself failed. A single mounted volume is still an
+		// unambiguous answer.
+		if listErr == nil && len(mounted) == 1 {
+			log.Printf("resolveVolume: DefaultVolume() failed (%v), using the only mounted volume vol%d", err, mounted[0])
+			return mounted[0], nil
+		}
 		return 0, fmt.Errorf("无法获取默认安装硬盘（%w）。请在设置中选择安装硬盘后重试", err)
 	}
-	if !p.volumeIsMounted(volume) {
-		return 0, fmt.Errorf("fnOS 返回的默认安装硬盘 vol%d 不可用。请在设置中手动选择安装硬盘后重试", volume)
+	if listErr != nil {
+		// Cannot enumerate volumes to validate; preflightInstall re-checks
+		// before anything destructive happens.
+		return volume, nil
 	}
-	return volume, nil
-}
-
-// volumeIsMounted reports whether idx names a currently mounted volume.
-// A ListVolumes failure is treated as "mounted" so a transient enumeration
-// error does not block installs — preflightInstall re-checks before anything
-// destructive happens.
-func (p *installPipeline) volumeIsMounted(idx int) bool {
-	volumes, err := p.ac.ListVolumes()
-	if err != nil {
-		return true
-	}
-	for _, v := range volumes {
-		if v.Index == idx {
-			return true
+	for _, idx := range mounted {
+		if idx == volume {
+			return volume, nil
 		}
 	}
-	return false
+	if len(mounted) == 1 {
+		log.Printf("resolveVolume: fnOS reported unusable default vol%d, using the only mounted volume vol%d", volume, mounted[0])
+		return mounted[0], nil
+	}
+	return 0, fmt.Errorf("fnOS 返回的默认安装硬盘 vol%d 不可用，且当前有多个存储空间。请在设置 → 应用安装位置 中选择要安装到哪个存储空间后重试", volume)
+}
+
+// mountedVolumes returns the indexes of the currently mounted volumes.
+func (p *installPipeline) mountedVolumes() ([]int, error) {
+	volumes, err := p.ac.ListVolumes()
+	if err != nil {
+		return nil, err
+	}
+	idx := make([]int, 0, len(volumes))
+	for _, v := range volumes {
+		idx = append(idx, v.Index)
+	}
+	return idx, nil
 }
 
 // resolveVolumeFor picks the installation volume for an operation. For an
