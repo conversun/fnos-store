@@ -834,13 +834,22 @@ default: // routeInstallLocal
 	// "[Info]Application [x] is already started." — which the CLI reports as a
 	// failure, turning a successful upgrade into a user-visible error.
 	if opName != "update" {
-		if err := runWithVirtualProgress(ctx, stream, "starting", "正在启动...", func() error {
-			return p.startApp(app.AppName)
-		}); err != nil {
-			_ = stream.sendError(err.Error())
-			return
-		}
-	}
+    if err := runWithVirtualProgress(ctx, stream, "starting", "正在启动...", func() error {
+        return p.startApp(app.AppName)
+    }); err != nil {
+        // Apps with no service port (e.g. nvidia-driver — a root-installed
+        // kernel driver with ctl_stop=false) have no startable service, so
+        // appcenter-cli start answers code 10332. That is the app's nature,
+        // not an install failure: the payload is already on disk. Surface it
+        // as a note rather than failing the whole operation (#226).
+        if app.ServicePort == 0 {
+            _ = stream.sendProgress(progressPayload{Step: "starting", Message: "该应用为驱动/工具类（无服务端口），无需启动"})
+        } else {
+            _ = stream.sendError(err.Error())
+            return
+        }
+    }
+}
 
 	if p.cacheStore != nil && app.ReleaseTag != "" {
 		p.cacheStore.SetInstalledTag(app.AppName, app.ReleaseTag)
