@@ -861,4 +861,30 @@ func TestUpdateUsesDaemonUpgradeNotInstallLocal(t *testing.T) {
 	})
 }
 
+// TestChooseInstallRoute locks the channel every operation installs/upgrades
+// through: updates always take the daemon's data-preserving upgrade, fresh
+// installs take the daemon's install channel when reachable (avoiding
+// install-local's code-10237 chown failures, #227/#228), and only a box whose
+// daemon is unreachable falls back to install-local for a fresh install.
+func TestChooseInstallRoute(t *testing.T) {
+	cases := []struct {
+		name      string
+		opName    string
+		daemonUp  bool
+		want      installRoute
+	}{
+		{"update uses the daemon upgrade even when the daemon is down", "update", false, routeDaemonUpgrade},
+		{"update uses the daemon upgrade when the daemon is up", "update", true, routeDaemonUpgrade},
+		{"fresh install uses the daemon install when the daemon is up", "install", true, routeDaemonInstall},
+		{"fresh install falls back to install-local only when the daemon is down", "install", false, routeInstallLocal},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := chooseInstallRoute(c.opName, c.daemonUp); got != c.want {
+				t.Errorf("chooseInstallRoute(%q, %v) = %v, want %v", c.opName, c.daemonUp, got, c.want)
+			}
+		})
+	}
+}
+
 var errSimulatedUpgrade = errors.New("simulated upgrade failure")

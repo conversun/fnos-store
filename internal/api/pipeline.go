@@ -717,6 +717,31 @@ func normalizeImageForPull(image, mirror string, multiRegistry bool) string {
 	return image
 }
 
+// installRoute names the channel a given operation installs/upgrades through.
+type installRoute int
+const (
+	routeDaemonUpgrade installRoute = iota // update -> daemon upgrade (data-preserving)
+	routeDaemonInstall                       // fresh install -> daemon install
+	routeInstallLocal                        // fresh install, daemon down -> install-local
+)
+
+// chooseInstallRoute picks the channel. Updates always take the daemon's
+// data-preserving upgrade (install-local would destroy the app, #189). Fresh
+// installs take the daemon's install channel when it is reachable — the
+// native path fnOS's own App Center uses, which avoids install-local's
+// "code 10237" chown failures (#227, #228) — and only fall back to
+// install-local when the daemon is unreachable, where that is safe because a
+// fresh install has no existing app/data to destroy.
+func chooseInstallRoute(opName string, daemonAvailable bool) installRoute {
+	if opName == "update" {
+		return routeDaemonUpgrade
+	}
+	if daemonAvailable {
+		return routeDaemonInstall
+	}
+	return routeInstallLocal
+}
+
 func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, opName string, app core.AppInfo, params []platform.WizardParam, refreshFn func(context.Context) error) {
 	// Guard first: refuse before downloading, so an affected system never
 	// reaches the uninstall-then-failed-reinstall path.
@@ -758,18 +783,28 @@ func (p *installPipeline) runStandard(ctx context.Context, stream *sseStream, op
 	}
 
 	// Updates go through the daemon's own upgrade channel, which preserves
-	// @appdata and can roll back. install-local (used for fresh installs) is
-	// uninstall-then-reinstall and destroys the app when the reinstall fails
-	// — conversun/fnos-apps#189. A failure here must NEVER fall back to it.
-	// Fresh installs also go through the daemon when it is reachable, so an
-	// app that declares an install wizard can actually receive the user's
-	// answers. install-local has no way to pass them.
-	installStep := func() error { return p.installFpk(fpkPath, volume) }
-	if opName == "update" {
-		installStep = func() error { return p.upgradeFpk(ctx, fpkPath) }
-	} else if len(params) > 0 {
-		installStep = func() error { return p.installFpkWithWizard(ctx, fpkPath, volume, params) }
-	}
+// @appdata and can roll back. install-local is uninstall-then-reinstall and
+// destroys the app when the reinstall fails — conversun/fnos-apps#189. A
+// failure there must NEVER fall back to it.
+//
+// Fresh installs ALSO go through the daemon by default now, not only when a
+// wizard supplies params. install-local is a CLI shortcut whose chown step
+// fails installs outright with the opaque "code 10237" on some builds
+// (conversun/fnos-apps#227, #228), while the daemon's install/task is the
+// native path fnOS's own App Center uses and does not hit it. Routing every
+// fresh install through it — with an empty param set when the app declares no
+// wizard — keeps the two mechanisms consistent. install-local survives only
+// as the fallback for a box whose daemon is unreachable, where it is safe
+// because a fresh install has no existing app/data to destroy.
+var installStep func() error
+switch chooseInstallRoute(opName, p.ac.UpgradeCapability().Allowed) {
+case routeDaemonUpgrade:
+    installStep = func() error { return p.upgradeFpk(ctx, fpkPath) }
+case routeDaemonInstall:
+    installStep = func() error { return p.installFpkWithWizard(ctx, fpkPath, volume, params) }
+default: // routeInstallLocal
+    installStep = func() error { return p.installFpk(fpkPath, volume) }
+}
 
 	if err := runWithVirtualProgress(ctx, stream, "installing", "正在安装...", installStep); err != nil {
 		_ = stream.sendError(err.Error())
