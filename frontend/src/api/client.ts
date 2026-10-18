@@ -144,7 +144,12 @@ function streamSSE(url: string, onEvent: SSECallback): SSEHandle {
   const promise = (async () => {
     const response = await fetch(url, { method: 'POST', signal: controller.signal });
     if (!response.ok) {
-      throw new Error(`Request failed: ${response.statusText}`);
+      const body: unknown = await response.json().catch(() => null);
+      const message = typeof body === 'object' && body !== null
+        && 'error' in body && typeof body.error === 'string'
+        ? body.error.trim()
+        : '';
+      throw new Error(`${message || response.statusText.trim() || '请求失败'} (HTTP ${response.status})`);
     }
 
     const reader = response.body?.getReader();
