@@ -69,7 +69,11 @@ func (s *Server) handleCleanup(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		return nil
-	}); err == nil && registered {
+	}); err != nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "无法确认应用注册状态，已取消清理: "+err.Error())
+		return
+	}
+	if registered {
 		writeAPIError(w, http.StatusConflict, "应用仍在 app center 注册中，请使用卸载功能；清理残留仅用于卸载失败的残留状态")
 		return
 	}

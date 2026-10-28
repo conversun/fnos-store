@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +14,31 @@ import (
 	"fnos-store/internal/platform"
 	"fnos-store/internal/source"
 )
+
+type cleanupListFailure struct{ *stubAppCenter }
+
+func (cleanupListFailure) List() ([]platform.InstalledApp, error) {
+	return nil, errors.New("appcenter unavailable")
+}
+
+func TestCleanupRefusesWhenRegisteredStateIsUnknown(t *testing.T) {
+	srv := newCleanupServer(t, nil)
+	srv.ac = cleanupListFailure{&stubAppCenter{}}
+	residue := filepath.Join(srv.appsDir, "stale-app", "manifest")
+	if err := os.MkdirAll(filepath.Dir(residue), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(residue, []byte("appname = stale-app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	w := doCleanup(srv, "stale-app")
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	if _, err := os.Stat(residue); err != nil {
+		t.Fatalf("residue was changed while appcenter was unavailable: %v", err)
+	}
+}
 
 // newCleanupServer builds the minimal Server the cleanup path needs. source
 // stays nil on purpose: refreshRegistry then fails and the handler answers
