@@ -75,7 +75,7 @@ fnos-store/
 - **Go 1.22+ ServeMux patterns** — `"GET /api/apps"`, `"POST /api/apps/{appname}/install"`.
 - **Thread safety** — RWMutex on Server (registry/status), Mutex on OperationQueue, RWMutex on ConfigManager.
 - **SSE for long operations** — install/update/uninstall stream progress via Server-Sent Events, not polling.
-- **No auth** — local service on NAS, assumes trusted network.
+- **Optional access protection** — settings can require an access token via browser Basic authentication (`fnos` username); always serve `Server`, not its raw `Mux`.
 - **Environment fallback chain** — env var → production path → dev path (see `main.go` `envOr()`).
 - **Frontend path alias** — `@/*` maps to `./src/*` (tsconfig paths).
 - **shadcn/ui components** — `components/ui/` are generated; customize via props, not by editing source.

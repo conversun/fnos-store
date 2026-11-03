@@ -32,7 +32,8 @@ func main() {
 	cfgMgr := config.NewManager(dataDir)
 	cfg, err := cfgMgr.LoadConfig()
 	if err != nil {
-		log.Printf("load config failed, using defaults: %v", err)
+		// A config read failure must not silently disable access protection.
+		log.Fatalf("load config failed: %v", err)
 	}
 
 	cacheStore := cache.NewStore(dataDir)
@@ -83,7 +84,7 @@ func main() {
 
 	httpServer := &http.Server{
 		Addr:    addr,
-		Handler: srv.Mux,
+		Handler: srv,
 	}
 
 	go func() {

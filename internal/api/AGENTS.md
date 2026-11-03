@@ -44,4 +44,4 @@ api/
 
 - **Don't call appcenter-cli directly** — always go through `pipeline` which uses `queue.WithCLI()`.
 - **Don't skip `queue.TryStart()`** — returns `false` if another operation is running; respond 409 Conflict.
-- **Don't add middleware** — no middleware chain exists; auth/CORS not needed (local service).
+- **Route requests through `Server.ServeHTTP`** — it enforces optional access-token protection and same-origin mutation checks; do not serve `Mux` directly.

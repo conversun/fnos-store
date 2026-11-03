@@ -67,6 +67,8 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
   const [storeInfo, setStoreInfo] = useState<StoreUpdateInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [accessProtection, setAccessProtection] = useState(false);
+  const [accessToken, setAccessToken] = useState<string | undefined>();
 
   // Speed test state — independent for GitHub and Docker
   const [ghChecking, setGhChecking] = useState(false);
@@ -104,6 +106,8 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
         ]);
         if (cancelled) return;
         setInterval(settings.check_interval_hours);
+        setAccessProtection(settings.access_protection ?? false);
+        setAccessToken(undefined);
         const m = settings.mirror || 'gh-proxy';
         const dm = settings.docker_mirror || 'daocloud';
         setMirror(m);
@@ -180,9 +184,14 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
   };
 
   const handleSave = async () => {
+    if (accessToken && (new TextEncoder().encode(accessToken).length < 16 || new TextEncoder().encode(accessToken).length > 256)) {
+      toast.error('访问令牌长度须为 16–256 字节');
+      return;
+    }
     setSaving(true);
     try {
       await updateSettings({
+        access_token: accessToken,
         check_interval_hours: interval,
         mirror,
         docker_mirror: dockerMirror,
@@ -191,6 +200,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
         install_volume: installVolume,
       });
       onClose();
+      if (accessToken !== undefined) window.location.reload();
     } catch (error) {
       console.error('Failed to save settings:', error);
       toast.error('保存设置失败');
@@ -215,6 +225,25 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
           </div>
         ) : (
           <div className="space-y-6 py-4 overflow-y-auto flex-1 min-h-0">
+            <fieldset className="flex flex-col gap-2">
+              <legend className="text-sm font-medium">访问保护</legend>
+              <p className="text-xs text-muted-foreground">
+                {accessProtection ? '已启用。留空保留当前令牌；填写新令牌可重置。' : '尚未启用。设置令牌后，所有访问均需登录。'}
+                用户名为 fnos，密码为访问令牌。远程访问请使用 HTTPS。
+              </p>
+              <label htmlFor="access-token" className="text-sm">新访问令牌</label>
+              <Input id="access-token" type="password" autoComplete="new-password"
+                minLength={16} maxLength={256} value={accessToken ?? ''}
+                placeholder="至少 16 个字符"
+                onChange={(event) => setAccessToken(event.target.value || undefined)} />
+              {accessProtection && (
+                <Button variant="outline" type="button" onClick={() => {
+                  setAccessToken('');
+                  setAccessProtection(false);
+                }}>关闭访问保护（保存后生效）</Button>
+              )}
+            </fieldset>
+
             <div className="space-y-2">
               <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                 自动检查更新间隔

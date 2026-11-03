@@ -22,6 +22,7 @@ type volumeOptionResponse struct {
 }
 
 type settingsResponse struct {
+	AccessProtection    bool                   `json:"access_protection"`
 	CheckIntervalHours  int                    `json:"check_interval_hours"`
 	Mirror              string                 `json:"mirror"`
 	MirrorOptions       []mirrorOptionResponse `json:"mirror_options"`
@@ -34,12 +35,13 @@ type settingsResponse struct {
 }
 
 type settingsRequest struct {
-	CheckIntervalHours int    `json:"check_interval_hours"`
-	Mirror             string `json:"mirror"`
-	DockerMirror       string `json:"docker_mirror"`
-	CustomGitHubMirror string `json:"custom_github_mirror"`
-	CustomDockerMirror string `json:"custom_docker_mirror"`
-	InstallVolume      int    `json:"install_volume"`
+	AccessToken        *string `json:"access_token"`
+	CheckIntervalHours int     `json:"check_interval_hours"`
+	Mirror             string  `json:"mirror"`
+	DockerMirror       string  `json:"docker_mirror"`
+	CustomGitHubMirror string  `json:"custom_github_mirror"`
+	CustomDockerMirror string  `json:"custom_docker_mirror"`
+	InstallVolume      int     `json:"install_volume"`
 }
 
 func githubMirrorOptionsResponse() []mirrorOptionResponse {
@@ -77,6 +79,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, settingsResponse{
+		AccessProtection:    cfg.AccessTokenHash != "",
 		CheckIntervalHours:  cfg.CheckIntervalHours,
 		Mirror:              cfg.Mirror,
 		MirrorOptions:       githubMirrorOptionsResponse(),
@@ -113,7 +116,19 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	existing := s.configMgr.Get()
+	tokenHash := existing.AccessTokenHash
+	if req.AccessToken != nil {
+		if len(*req.AccessToken) > 0 && (len(*req.AccessToken) < 16 || len(*req.AccessToken) > 256) {
+			writeAPIError(w, http.StatusBadRequest, "访问令牌长度须为 16–256 字节")
+			return
+		}
+		tokenHash = ""
+		if *req.AccessToken != "" {
+			tokenHash = accessTokenHash(*req.AccessToken)
+		}
+	}
 	cfg := config.Config{
+		AccessTokenHash:    tokenHash,
 		CheckIntervalHours: req.CheckIntervalHours,
 		Mirror:             req.Mirror,
 		DockerMirror:       req.DockerMirror,
@@ -141,6 +156,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, settingsResponse{
+		AccessProtection:    cfg.AccessTokenHash != "",
 		CheckIntervalHours:  req.CheckIntervalHours,
 		Mirror:              req.Mirror,
 		MirrorOptions:       githubMirrorOptionsResponse(),

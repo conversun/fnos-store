@@ -162,6 +162,7 @@ func DockerFallbackPrefixes(selectedKey string, cfg Config) []string {
 
 // Config holds the persistent store configuration.
 type Config struct {
+	AccessTokenHash    string   `json:"access_token_hash,omitempty"`
 	CheckIntervalHours int      `json:"check_interval_hours"`
 	Mirror             string   `json:"mirror"`
 	DockerMirror       string   `json:"docker_mirror"`
@@ -266,8 +267,25 @@ func (m *Manager) SaveConfig(cfg Config) error {
 		return err
 	}
 
+	// Commit on disk before changing live access protection. A failed save
+	// must not lock the current browser out with an unpersisted token.
+	f, err := os.CreateTemp(filepath.Dir(m.filePath), ".config-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.Write(raw); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(f.Name(), m.filePath); err != nil {
+		return err
+	}
 	m.cfg = cfg
-	return os.WriteFile(m.filePath, raw, 0o644)
+	return nil
 }
 
 // Get returns the current in-memory config.

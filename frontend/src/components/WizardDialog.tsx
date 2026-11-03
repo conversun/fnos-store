@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,14 +47,16 @@ const WizardDialog: React.FC<WizardDialogProps> = ({
   }, [wizard]);
 
   // Seed defaults the app declares.
-  useEffect(() => {
+  const [previousItems, setPreviousItems] = useState<WizardItem[] | null>(null);
+  if (items !== previousItems) {
+    setPreviousItems(items);
     const seed: Record<string, string> = {};
     for (const it of items) {
       if (it.field && it.initValue !== undefined) seed[it.field] = it.initValue;
     }
     setValues(seed);
     setTouched(false);
-  }, [items]);
+  }
 
   const errorFor = (item: WizardItem): string | null => {
     if (!item.field) return null;

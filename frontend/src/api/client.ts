@@ -294,6 +294,7 @@ export interface VolumeOption {
 }
 
 export interface Settings {
+  access_protection?: boolean;
   check_interval_hours: number;
   mirror: string;
   mirror_options?: MirrorOption[];
@@ -346,7 +347,7 @@ export const fetchSettings = async (): Promise<Settings> => {
   return response.json();
 };
 
-export const updateSettings = async (settings: { check_interval_hours: number; mirror: string; docker_mirror: string; custom_github_mirror?: string; custom_docker_mirror?: string; install_volume: number }): Promise<void> => {
+export const updateSettings = async (settings: { access_token?: string; check_interval_hours: number; mirror: string; docker_mirror: string; custom_github_mirror?: string; custom_docker_mirror?: string; install_volume: number }): Promise<void> => {
   const response = await fetch(apiUrl('/api/settings'), {
     method: 'PUT',
     headers: {
