@@ -23,6 +23,11 @@ const storeAppName = "fnos-apps-store"
 
 func main() {
 	addr := envOr("LISTEN_ADDR", ":8011")
+	socketPath := os.Getenv("LISTEN_SOCKET")
+	if socketPath != "" {
+		// The root-owned fnOS connector needs no group/world socket access.
+		syscall.Umask(0o077)
+	}
 	projectRoot := envOr("PROJECT_ROOT", findProjectRoot())
 	appsDir := envOr("APPS_DIR", defaultAppsDir(projectRoot))
 	dataDir := envOr("DATA_DIR", defaultDataDir(projectRoot))
@@ -73,6 +78,7 @@ func main() {
 		Platform:          platform.DetectPlatform(),
 		StoreApp:          storeAppName,
 		StaticFS:          storeassets.WebFS,
+		GatewayMode:       socketPath != "",
 	})
 
 	sched := scheduler.New(checkInterval, srv.RefreshRegistry, cacheStore.LastCheckAt)
@@ -80,6 +86,10 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	listener, err := listenStore(addr, socketPath)
+	if err != nil {
+		log.Fatalf("listen failed: %v", err)
+	}
 	go sched.Start(ctx)
 
 	httpServer := &http.Server{
@@ -107,8 +117,8 @@ func main() {
 		cancel()
 	}()
 
-	log.Printf("fnos-store listening on %s", addr)
-	if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
+	log.Printf("fnos-store listening on %s %s", listener.Addr().Network(), listener.Addr())
+	if err := httpServer.Serve(listener); err != http.ErrServerClosed {
 		log.Fatalf("server error: %v", err)
 	}
 }

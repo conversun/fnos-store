@@ -1,7 +1,9 @@
+import { LocalizedDialogContent as DialogContent } from './LocalizedDialogContent';
+import { t, useLocale, localizeMessage } from '@/lib/i18n';
+import type { TranslationKey } from '@/lib/translations';
 import { useEffect, useState } from 'react';
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -20,7 +22,7 @@ interface ReportFailureDialogProps {
   errorMessage: string;
 }
 
-const stepTranslations: Record<string, string> = {
+const stepTranslations: Record<string, TranslationKey> = {
   downloading: '下载',
   pulling: '拉取镜像',
   installing: '安装',
@@ -30,6 +32,7 @@ const stepTranslations: Record<string, string> = {
 };
 
 export function ReportFailureDialog({ open, onClose, app, step, errorMessage }: ReportFailureDialogProps) {
+  useLocale();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<DiagnosticResponse | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -75,22 +78,22 @@ export function ReportFailureDialog({ open, onClose, app, step, errorMessage }: 
   const handleCopy = () => {
     if (data?.report) {
       navigator.clipboard.writeText(JSON.stringify(data.report, null, 2))
-        .then(() => toast.success('已复制诊断信息'))
-        .catch(() => toast.error('复制失败'));
+        .then(() => toast.success(t('已复制诊断信息')))
+        .catch(() => toast.error(t('复制失败')));
     } else {
       navigator.clipboard.writeText(errorMessage)
-        .then(() => toast.success('已复制错误信息'))
-        .catch(() => toast.error('复制失败'));
+        .then(() => toast.success(t('已复制错误信息')))
+        .catch(() => toast.error(t('复制失败')));
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-xl max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>应用操作失败</DialogTitle>
+          <DialogTitle>{t('应用操作失败')}</DialogTitle>
           <DialogDescription>
-            收集了以下诊断信息，请协助我们改进。
+            {t('收集了以下诊断信息，请协助我们改进。')}
           </DialogDescription>
         </DialogHeader>
 
@@ -101,7 +104,7 @@ export function ReportFailureDialog({ open, onClose, app, step, errorMessage }: 
             </div>
           ) : fetchError ? (
             <div className="space-y-4">
-              <p className="text-sm text-destructive">获取诊断信息失败: {fetchError}</p>
+              <p className="text-sm text-destructive">{t('获取诊断信息失败')}: {localizeMessage(fetchError)}</p>
               <div className="bg-muted p-4 rounded-md">
                 <p className="text-sm font-mono break-all">{errorMessage}</p>
               </div>
@@ -110,47 +113,47 @@ export function ReportFailureDialog({ open, onClose, app, step, errorMessage }: 
             <div className="space-y-4 text-sm">
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <span className="text-muted-foreground">应用: </span>
+                  <span className="text-muted-foreground">{t('应用:')}{' '}</span>
                   <span className="font-medium">{data.report.display_name} {data.report.version ? `v${data.report.version}` : ''}</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">架构: </span>
+                  <span className="text-muted-foreground">{t('架构:')}{' '}</span>
                   <span className="font-medium">{data.report.arch}</span>
                 </div>
                 <div className="col-span-2">
-                  <span className="text-muted-foreground">失败步骤: </span>
-                  <span className="font-medium">{stepTranslations[data.report.failed_step] || data.report.failed_step}</span>
+                  <span className="text-muted-foreground">{t('失败步骤:')}{' '}</span>
+                  <span className="font-medium">{stepTranslations[data.report.failed_step] ? t(stepTranslations[data.report.failed_step]) : data.report.failed_step}</span>
                 </div>
                 <div className="col-span-2">
-                  <span className="text-muted-foreground">错误信息: </span>
+                  <span className="text-muted-foreground">{t('原始诊断信息')}: </span>
                   <span className="font-medium text-destructive">{data.report.error_message}</span>
                 </div>
               </div>
               
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">相关日志:</span>
+                  <span className="text-muted-foreground">{t('相关日志:')}</span>
                   {data.report.log_truncated && (
-                    <span className="text-xs text-muted-foreground italic">日志已截断</span>
+                    <span className="text-xs text-muted-foreground italic">{t('日志已截断')}</span>
                   )}
                 </div>
                 <pre className="bg-muted p-4 rounded-md overflow-auto max-h-[200px] text-xs font-mono whitespace-pre-wrap">
-                  {data.report.log_tail || '暂无相关日志'}
+                  {data.report.log_tail || t('暂无相关日志')}
                 </pre>
               </div>
             </div>
           ) : null}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onClose}>
-            关闭
+            {t('关闭')}
           </Button>
           <Button variant="secondary" onClick={handleCopy}>
-            {data?.report ? '复制诊断信息' : '复制错误信息'}
+            {data?.report ? t('复制诊断信息') : t('复制错误信息')}
           </Button>
           <Button onClick={handleReport}>
-            打开 GitHub 上报
+            {t('打开 GitHub 上报')}
           </Button>
         </DialogFooter>
       </DialogContent>

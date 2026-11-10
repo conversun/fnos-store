@@ -1,10 +1,11 @@
+import { LocalizedDialogContent as DialogContent } from './LocalizedDialogContent';
+import { t, useLocale } from '@/lib/i18n';
 import React, { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -38,6 +39,7 @@ const WizardDialog: React.FC<WizardDialogProps> = ({
   onCancel,
   onConfirm,
 }) => {
+  useLocale();
   const [values, setValues] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState(false);
 
@@ -62,9 +64,9 @@ const WizardDialog: React.FC<WizardDialogProps> = ({
     if (!item.field) return null;
     const v = values[item.field] ?? '';
     for (const rule of item.rules ?? []) {
-      if (rule.required && v.trim() === '') return rule.message || '此项为必填';
+      if (rule.required && v.trim() === '') return rule.message || t('此项为必填');
       if (rule.min !== undefined && v.length < rule.min) {
-        return rule.message || `至少 ${rule.min} 位`;
+        return rule.message || t('至少 {count} 位', { count: rule.min });
       }
     }
     return null;
@@ -85,7 +87,7 @@ const WizardDialog: React.FC<WizardDialogProps> = ({
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
         <DialogHeader className="shrink-0">
-          <DialogTitle>安装 {appDisplayName}</DialogTitle>
+          <DialogTitle>{t('安装 {name}', { name: appDisplayName })}</DialogTitle>
         </DialogHeader>
 
         {loading ? (
@@ -111,10 +113,11 @@ const WizardDialog: React.FC<WizardDialogProps> = ({
               const err = touched ? errorFor(item) : null;
               return (
                 <div key={item.field} className="space-y-1.5">
-                  <label className="text-sm font-medium leading-none">
+                  <label htmlFor={`wizard-${item.field}`} className="text-sm font-medium leading-none">
                     {item.label ?? item.field}
                   </label>
                   <Input
+                    id={`wizard-${item.field}`}
                     type={item.type === 'password' ? 'password' : 'text'}
                     value={values[item.field] ?? ''}
                     onChange={(e) =>
@@ -131,10 +134,10 @@ const WizardDialog: React.FC<WizardDialogProps> = ({
 
         <DialogFooter className="shrink-0">
           <Button variant="outline" onClick={onCancel}>
-            取消
+            {t('取消')}
           </Button>
           <Button onClick={submit} disabled={loading}>
-            安装
+            {t('安装')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import React from 'react';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ interface RecommendedAppCardProps {
 }
 
 const RecommendedAppCard: React.FC<RecommendedAppCardProps> = ({ app }) => {
+  useLocale();
   return (
     <Card className={cn(
       "relative overflow-hidden border border-border/30 bg-card shadow-[0_1px_3px_0_rgb(0_0_0/0.04)] rounded-xl"
@@ -53,7 +55,7 @@ const RecommendedAppCard: React.FC<RecommendedAppCardProps> = ({ app }) => {
             className="rounded-full px-3.5 h-7 text-xs font-medium"
           >
             <ExternalLink className="mr-1 h-3.5 w-3.5" />
-            查看来源
+            {t('查看来源')}
           </Button>
         </div>
       </div>

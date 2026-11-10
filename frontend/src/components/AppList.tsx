@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import React from 'react';
 import type { AppInfo, AppOperation } from '../api/client';
 import AppCard from './AppCard';
@@ -23,15 +24,16 @@ interface AppListProps {
 const getEmptyMessage = (filterType?: string) => {
   switch (filterType) {
     case 'installed':
-      return { icon: CheckCircle2, text: '暂无已安装的应用' };
+      return { icon: CheckCircle2, text: t('暂无已安装的应用') };
     case 'update_available':
-      return { icon: RefreshCw, text: '所有应用都是最新版本' };
+      return { icon: RefreshCw, text: t('所有应用都是最新版本') };
     default:
-      return { icon: PackageSearch, text: '暂无可用应用' };
+      return { icon: PackageSearch, text: t('暂无可用应用') };
   }
 };
 
 const AppList: React.FC<AppListProps> = ({ apps, loading, onInstall, onUpdate, onUninstall, onCleanup, onDetail, onCancelOp, filterType, appOperations, searchQuery, upgradeAllowed }) => {
+  useLocale();
   if (loading) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -53,7 +55,7 @@ const AppList: React.FC<AppListProps> = ({ apps, loading, onInstall, onUpdate, o
       return (
         <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
           <Search className="h-12 w-12 mb-4 opacity-40" />
-          <p className="text-sm">未找到匹配「{searchQuery.trim()}」的应用</p>
+          <p className="text-sm">{t('未找到匹配「{query}」的应用', { query: searchQuery.trim() })}</p>
         </div>
       );
     }

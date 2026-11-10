@@ -1,4 +1,6 @@
 import { apiUrl } from './base';
+import { t } from '../lib/i18n';
+import { mutationFetch } from './mutation';
 
 export interface AppInfo {
   appname: string;
@@ -101,7 +103,7 @@ export interface AppOperation {
 export const fetchApps = async (): Promise<AppsResponse> => {
   const response = await fetch(apiUrl('/api/apps'));
   if (!response.ok) {
-    throw new Error(`Failed to fetch apps: ${response.statusText}`);
+    throw new Error(`${t('加载应用失败')}: ${response.statusText}`);
   }
   return response.json();
 };
@@ -115,11 +117,11 @@ export const fetchRecommended = async (): Promise<RecommendedAppsResponse> => {
 };
 
 export const triggerCheck = async (): Promise<CheckResponse> => {
-  const response = await fetch(apiUrl('/api/check'), {
+  const response = await mutationFetch(apiUrl('/api/check'), {
     method: 'POST',
   });
   if (!response.ok) {
-    throw new Error(`Failed to trigger check: ${response.statusText}`);
+    throw new Error(`${t('检查更新失败')}: ${response.statusText}`);
   }
   return response.json();
 };
@@ -142,19 +144,19 @@ function streamSSE(url: string, onEvent: SSECallback): SSEHandle {
   const controller = new AbortController();
 
   const promise = (async () => {
-    const response = await fetch(url, { method: 'POST', signal: controller.signal });
+    const response = await mutationFetch(url, { method: 'POST', signal: controller.signal });
     if (!response.ok) {
       const body: unknown = await response.json().catch(() => null);
       const message = typeof body === 'object' && body !== null
         && 'error' in body && typeof body.error === 'string'
         ? body.error.trim()
         : '';
-      throw new Error(`${message || response.statusText.trim() || '请求失败'} (HTTP ${response.status})`);
+      throw new Error(`${message || response.statusText.trim() || t('请求失败')} (HTTP ${response.status})`);
     }
 
     const reader = response.body?.getReader();
     if (!reader) {
-      throw new Error('No response body');
+      throw new Error(t('无响应内容'));
     }
 
     const decoder = new TextDecoder();
@@ -268,10 +270,10 @@ export const uninstallApp = (appname: string, onEvent: SSECallback): SSEHandle =
 };
 
 export async function cleanupApp(appname: string): Promise<{ removed: string[]; docker_note?: string; warning?: string }> {
-  const res = await fetch(apiUrl(`/api/apps/${encodeURIComponent(appname)}/cleanup`), { method: 'POST' });
+  const res = await mutationFetch(apiUrl(`/api/apps/${encodeURIComponent(appname)}/cleanup`), { method: 'POST' });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: '' }));
-    throw new Error(body.error || `清理失败: ${res.status}`);
+    throw new Error(body.error || `${t('清理失败')}: ${res.status}`);
   }
   return res.json();
 }
@@ -320,9 +322,9 @@ export interface MirrorCheckResponse {
 
 export const checkMirrors = async (type?: 'github' | 'docker'): Promise<MirrorCheckResponse> => {
   const params = type ? `?type=${type}` : '';
-  const response = await fetch(apiUrl(`/api/mirrors/check${params}`), { method: 'POST' });
+  const response = await mutationFetch(apiUrl(`/api/mirrors/check${params}`), { method: 'POST' });
   if (!response.ok) {
-    throw new Error(`Failed to check mirrors: ${response.statusText}`);
+    throw new Error(`${t('测速失败')}: ${response.statusText}`);
   }
   return response.json();
 };
@@ -342,13 +344,13 @@ export interface StoreUpdateInfo {
 export const fetchSettings = async (): Promise<Settings> => {
   const response = await fetch(apiUrl('/api/settings'));
   if (!response.ok) {
-    throw new Error(`Failed to fetch settings: ${response.statusText}`);
+    throw new Error(`${t('加载设置失败')}: ${response.statusText}`);
   }
   return response.json();
 };
 
 export const updateSettings = async (settings: { access_token?: string; check_interval_hours: number; mirror: string; docker_mirror: string; custom_github_mirror?: string; custom_docker_mirror?: string; install_volume: number }): Promise<void> => {
-  const response = await fetch(apiUrl('/api/settings'), {
+  const response = await mutationFetch(apiUrl('/api/settings'), {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -356,14 +358,14 @@ export const updateSettings = async (settings: { access_token?: string; check_in
     body: JSON.stringify(settings),
   });
   if (!response.ok) {
-    throw new Error(`Failed to update settings: ${response.statusText}`);
+    throw new Error(`${t('保存设置失败')}: ${response.statusText}`);
   }
 };
 
 export const fetchStatus = async (): Promise<StatusResponse> => {
   const response = await fetch(apiUrl('/api/status'));
   if (!response.ok) {
-    throw new Error(`Failed to fetch status: ${response.statusText}`);
+    throw new Error(`${t('获取状态失败')}: ${response.statusText}`);
   }
   return response.json();
 };
@@ -371,7 +373,7 @@ export const fetchStatus = async (): Promise<StatusResponse> => {
 export const fetchStoreUpdate = async (): Promise<StoreUpdateInfo> => {
   const response = await fetch(apiUrl('/api/store-update'));
   if (!response.ok) {
-    throw new Error(`Failed to fetch store update info: ${response.statusText}`);
+    throw new Error(`${t('获取商店更新失败')}: ${response.statusText}`);
   }
   return response.json();
 };
@@ -381,16 +383,16 @@ export const triggerStoreUpdate = (onEvent: SSECallback): SSEHandle => {
 };
 
 export const ignoreUpdate = async (appname: string): Promise<void> => {
-  const response = await fetch(apiUrl(`/api/apps/${appname}/ignore-update`), { method: 'PUT' });
+  const response = await mutationFetch(apiUrl(`/api/apps/${appname}/ignore-update`), { method: 'PUT' });
   if (!response.ok) {
-    throw new Error(`Failed to ignore update: ${response.statusText}`);
+    throw new Error(`${t('忽略更新失败')}: ${response.statusText}`);
   }
 };
 
 export const unignoreUpdate = async (appname: string): Promise<void> => {
-  const response = await fetch(apiUrl(`/api/apps/${appname}/ignore-update`), { method: 'DELETE' });
+  const response = await mutationFetch(apiUrl(`/api/apps/${appname}/ignore-update`), { method: 'DELETE' });
   if (!response.ok) {
-    throw new Error(`Failed to unignore update: ${response.statusText}`);
+    throw new Error(`${t('取消忽略更新失败')}: ${response.statusText}`);
   }
 };
 
@@ -417,6 +419,6 @@ export interface DiagnosticResponse {
 export async function fetchDiagnostic(app: string, step: string, errorMsg: string): Promise<DiagnosticResponse> {
   const params = new URLSearchParams({ step, error: errorMsg });
   const res = await fetch(apiUrl(`/api/apps/${encodeURIComponent(app)}/diagnostic?${params}`));
-  if (!res.ok) throw new Error(`获取诊断信息失败: ${res.status}`);
+  if (!res.ok) throw new Error(`${t('获取诊断信息失败')}: ${res.status}`);
   return res.json();
 }

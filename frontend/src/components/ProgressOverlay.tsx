@@ -1,7 +1,8 @@
+import { LocalizedDialogContent as DialogContent } from './LocalizedDialogContent';
+import { t, useLocale, localizeMessage } from '@/lib/i18n';
 import React from 'react';
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -21,6 +22,7 @@ interface ProgressOverlayProps {
 }
 
 const ProgressOverlay: React.FC<ProgressOverlayProps> = ({ visible, message, progress, speed, downloaded, total, onCancel, onDismiss }) => {
+  useLocale();
   return (
     <Dialog open={visible} onOpenChange={() => {}}>
       <DialogContent 
@@ -29,12 +31,12 @@ const ProgressOverlay: React.FC<ProgressOverlayProps> = ({ visible, message, pro
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>正在处理...</DialogTitle>
+          <DialogTitle>{t('正在处理...')}</DialogTitle>
         </DialogHeader>
         
         <div className="flex flex-col gap-2 py-2">
           <div className="flex justify-between text-sm text-muted-foreground">
-            <span>{message}</span>
+            <span>{localizeMessage(message)}</span>
             <span>{Math.round(progress)}%</span>
           </div>
           <Progress value={progress} className="w-full" />
@@ -52,11 +54,11 @@ const ProgressOverlay: React.FC<ProgressOverlayProps> = ({ visible, message, pro
           <div className="flex justify-end pt-2">
             {onCancel ? (
               <Button variant="ghost" size="sm" onClick={onCancel}>
-                取消
+                {t('取消')}
               </Button>
             ) : (
               <Button variant="ghost" size="sm" onClick={onDismiss}>
-                关闭
+                {t('关闭')}
               </Button>
             )}
           </div>

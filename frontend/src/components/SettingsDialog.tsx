@@ -3,11 +3,13 @@ import { fetchSettings, updateSettings, fetchStoreUpdate, checkMirrors, type Mir
 import type { StoreUpdateInfo } from '../api/client';
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
+import { LocalizedDialogContent as DialogContent } from './LocalizedDialogContent';
+import { LanguageSetting } from './LanguageSetting';
+import { t, useLocale } from '@/lib/i18n';
 import {
   Select,
   SelectContent,
@@ -45,8 +47,8 @@ function latencyColor(result: MirrorCheckResult): string {
 }
 
 function latencyText(result: MirrorCheckResult): string {
-  if (result.status === 'timeout') return '超时';
-  if (result.status === 'error') return '失败';
+  if (result.status === 'timeout') return t('超时');
+  if (result.status === 'error') return t('失败');
   return `${result.latency_ms}ms`;
 }
 
@@ -55,6 +57,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
   onClose,
   onStoreUpdate,
 }) => {
+  useLocale();
   const [interval, setInterval] = useState<number>(24);
   const [mirror, setMirror] = useState<string>('gh-proxy');
   const [mirrorOptions, setMirrorOptions] = useState<MirrorOption[]>([]);
@@ -124,7 +127,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
       } catch (error) {
         if (cancelled) return;
         console.error('Failed to load settings:', error);
-        toast.error('加载设置失败');
+        toast.error(t('加载设置失败'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -143,7 +146,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
       setGhLatency(gh);
     } catch (error) {
       console.error('GitHub speed test failed:', error);
-      toast.error('GitHub 测速失败');
+      toast.error(t('GitHub 测速失败'));
     } finally {
       setGhChecking(false);
     }
@@ -159,7 +162,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
       setDkLatency(dk);
     } catch (error) {
       console.error('Docker speed test failed:', error);
-      toast.error('Docker 测速失败');
+      toast.error(t('Docker 测速失败'));
     } finally {
       setDkChecking(false);
     }
@@ -185,7 +188,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
   const handleSave = async () => {
     if (accessToken && (new TextEncoder().encode(accessToken).length < 16 || new TextEncoder().encode(accessToken).length > 256)) {
-      toast.error('访问令牌长度须为 16–256 字节');
+      toast.error(t('访问令牌长度须为 16–256 字节'));
       return;
     }
     setSaving(true);
@@ -203,7 +206,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
       if (accessToken !== undefined) window.location.reload();
     } catch (error) {
       console.error('Failed to save settings:', error);
-      toast.error('保存设置失败');
+      toast.error(t('保存设置失败'));
     } finally {
       setSaving(false);
     }
@@ -216,8 +219,9 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
     <Dialog open={visible} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
         <DialogHeader className="shrink-0">
-          <DialogTitle>设置</DialogTitle>
+          <DialogTitle>{t('设置')}</DialogTitle>
         </DialogHeader>
+        <LanguageSetting />
         
         {loading ? (
           <div className="flex justify-center py-8">
@@ -226,65 +230,65 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
         ) : (
           <div className="space-y-6 py-4 overflow-y-auto flex-1 min-h-0">
             <fieldset className="flex flex-col gap-2">
-              <legend className="text-sm font-medium">访问保护</legend>
+              <legend className="text-sm font-medium">{t('访问保护')}</legend>
               <p className="text-xs text-muted-foreground">
-                {accessProtection ? '已启用。留空保留当前令牌；填写新令牌可重置。' : '尚未启用。设置令牌后，所有访问均需登录。'}
-                用户名为 fnos，密码为访问令牌。远程访问请使用 HTTPS。
+                {accessProtection ? t('已启用。留空保留当前令牌；填写新令牌可重置。') : t('尚未启用。设置令牌后，所有访问均需登录。')}
+                {' '}{t('用户名为 fnos，密码为访问令牌。远程访问请使用 HTTPS。')}
               </p>
-              <label htmlFor="access-token" className="text-sm">新访问令牌</label>
+              <label htmlFor="access-token" className="text-sm">{t('新访问令牌')}</label>
               <Input id="access-token" type="password" autoComplete="new-password"
                 minLength={16} maxLength={256} value={accessToken ?? ''}
-                placeholder="至少 16 个字符"
+                placeholder={t('至少 16 个字符')}
                 onChange={(event) => setAccessToken(event.target.value || undefined)} />
               {accessProtection && (
-                <Button variant="outline" type="button" onClick={() => {
+                <Button variant="outline" type="button" className="h-auto min-h-9 whitespace-normal" onClick={() => {
                   setAccessToken('');
                   setAccessProtection(false);
-                }}>关闭访问保护（保存后生效）</Button>
+                }}>{t('关闭访问保护（保存后生效）')}</Button>
               )}
             </fieldset>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                自动检查更新间隔
+              <label htmlFor="check-interval" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                {t('自动检查更新间隔')}
               </label>
               <Select 
                 value={interval.toString()} 
                 onValueChange={(value) => setInterval(Number(value))}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="选择间隔" />
+                <SelectTrigger id="check-interval">
+                  <SelectValue placeholder={t('选择间隔')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1">1 小时</SelectItem>
-                  <SelectItem value="6">6 小时</SelectItem>
-                  <SelectItem value="12">12 小时</SelectItem>
-                  <SelectItem value="24">24 小时</SelectItem>
+                  <SelectItem value="1">{t('1 小时')}</SelectItem>
+                  <SelectItem value="6">{t('6 小时')}</SelectItem>
+                  <SelectItem value="12">{t('12 小时')}</SelectItem>
+                  <SelectItem value="24">{t('24 小时')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {volumeOptions.length > 0 && (
               <div className="space-y-2">
-                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                  应用安装位置
+                <label htmlFor="install-volume" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  {t('应用安装位置')}
                 </label>
                 <Select
                   value={installVolume.toString()}
                   onValueChange={(value) => setInstallVolume(Number(value))}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择存储空间" />
+                  <SelectTrigger id="install-volume">
+                    <SelectValue placeholder={t('选择存储空间')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="0">系统默认</SelectItem>
+                    <SelectItem value="0">{t('系统默认')}</SelectItem>
                     {volumeOptions.map((vol) => (
                       <SelectItem key={vol.index} value={vol.index.toString()}>
                         <span className="flex items-center gap-2">
-                          <span>存储空间 {vol.index}</span>
+                          <span>{t('存储空间 {index}', { index: vol.index })}</span>
                           {vol.total_bytes > 0 && (
                             <span className="text-xs text-muted-foreground">
-                              {formatBytes(vol.free_bytes)} 可用 / {formatBytes(vol.total_bytes)}
+                              {t('{free} 可用 / {total}', { free: formatBytes(vol.free_bytes), total: formatBytes(vol.total_bytes) })}
                             </span>
                           )}
                         </span>
@@ -293,16 +297,16 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  选择应用安装到哪个存储空间，默认使用系统指定的存储空间
+                  {t('选择应用安装到哪个存储空间，默认使用系统指定的存储空间')}
                 </p>
               </div>
             )}
 
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium leading-none">
-                    GitHub 下载加速
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <label htmlFor="github-enabled" className="text-sm font-medium leading-none">
+                    {t('GitHub 下载加速')}
                   </label>
                   <Button
                     variant="ghost"
@@ -316,10 +320,10 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     ) : (
                       <Zap className="h-3 w-3 mr-1" />
                     )}
-                    测速
+                    {t('测速')}
                   </Button>
                 </div>
-                <Switch checked={githubEnabled} onCheckedChange={handleGithubToggle} />
+                <Switch id="github-enabled" checked={githubEnabled} onCheckedChange={handleGithubToggle} />
               </div>
               {githubEnabled && (
                 <>
@@ -327,8 +331,8 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     value={mirror}
                     onValueChange={(value) => setMirror(value)}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="选择镜像" />
+                    <SelectTrigger aria-label={t('GitHub 下载加速')}>
+                      <SelectValue placeholder={t('选择镜像')} />
                     </SelectTrigger>
                     <SelectContent>
                       {githubSelectOptions.map((opt) => {
@@ -336,7 +340,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
                         return (
                           <SelectItem key={opt.key} value={opt.key}>
                             <span className="flex items-center justify-between w-full gap-2">
-                              <span>{opt.label}</span>
+                              <span>{opt.key === 'custom' ? t('自定义') : opt.label}</span>
                               {result && (
                                 <span className={`text-[11px] tabular-nums ${latencyColor(result)}`}>
                                   {latencyText(result)}
@@ -350,6 +354,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
                   </Select>
                   {mirror === 'custom' && (
                     <Input
+                      aria-label={t('自定义 GitHub 镜像地址')}
                       placeholder="https://your-proxy.example.com/"
                       value={customGithubMirror}
                       onChange={(e) => setCustomGithubMirror(e.target.value)}
@@ -358,15 +363,15 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 </>
               )}
               <p className="text-xs text-muted-foreground">
-                {githubEnabled ? '使用镜像加速从 GitHub 下载应用安装包' : '直接从 GitHub 下载，不使用加速'}
+                {githubEnabled ? t('使用镜像加速从 GitHub 下载应用安装包') : t('直接从 GitHub 下载，不使用加速')}
               </p>
             </div>
 
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium leading-none">
-                    Docker 镜像加速
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <label htmlFor="docker-enabled" className="text-sm font-medium leading-none">
+                    {t('Docker 镜像加速')}
                   </label>
                   <Button
                     variant="ghost"
@@ -380,10 +385,10 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     ) : (
                       <Zap className="h-3 w-3 mr-1" />
                     )}
-                    测速
+                    {t('测速')}
                   </Button>
                 </div>
-                <Switch checked={dockerEnabled} onCheckedChange={handleDockerToggle} />
+                <Switch id="docker-enabled" checked={dockerEnabled} onCheckedChange={handleDockerToggle} />
               </div>
               {dockerEnabled && (
                 <>
@@ -391,8 +396,8 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     value={dockerMirror}
                     onValueChange={(value) => setDockerMirror(value)}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="选择镜像" />
+                    <SelectTrigger aria-label={t('Docker 镜像加速')}>
+                      <SelectValue placeholder={t('选择镜像')} />
                     </SelectTrigger>
                     <SelectContent>
                       {dockerSelectOptions.map((opt) => {
@@ -400,7 +405,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
                         return (
                           <SelectItem key={opt.key} value={opt.key}>
                             <span className="flex items-center justify-between w-full gap-2">
-                              <span>{opt.label}</span>
+                              <span>{opt.key === 'custom' ? t('自定义') : opt.label}</span>
                               {result && (
                                 <span className={`text-[11px] tabular-nums ${latencyColor(result)}`}>
                                   {latencyText(result)}
@@ -414,6 +419,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
                   </Select>
                   {dockerMirror === 'custom' && (
                     <Input
+                      aria-label={t('自定义 Docker 镜像地址')}
                       placeholder="your-mirror.example.com/"
                       value={customDockerMirror}
                       onChange={(e) => setCustomDockerMirror(e.target.value)}
@@ -422,21 +428,21 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 </>
               )}
               <p className="text-xs text-muted-foreground">
-                {dockerEnabled ? 'Docker 类应用拉取镜像时使用的加速源' : '直接从 Docker Hub 拉取，不使用加速'}
+                {dockerEnabled ? t('Docker 类应用拉取镜像时使用的加速源') : t('直接从 Docker Hub 拉取，不使用加速')}
               </p>
             </div>
 
             <Separator />
 
             <div className="space-y-4">
-              <h3 className="text-sm font-medium text-muted-foreground">商店版本</h3>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-muted-foreground">当前版本:</span>
-                  <span className="font-medium">{storeInfo?.current_version || '未知'}</span>
+              <h3 className="text-sm font-medium text-muted-foreground">{t('商店版本')}</h3>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">{t('当前版本:')}</span>
+                  <span className="font-medium">{storeInfo?.current_version || t('未知')}</span>
                   {storeInfo?.has_update && (
-                    <Badge variant="secondary" className="bg-primary/10 text-primary border-0 font-medium px-1.5 h-5 text-[11px] rounded-full">
-                      v{storeInfo.available_version} 可用
+                    <Badge variant="secondary" className="bg-primary/10 text-primary border-0 font-medium px-1.5 text-xs rounded-full">
+                      {t('v{version} 可用', { version: storeInfo.available_version ?? '' })}
                     </Badge>
                   )}
                 </div>
@@ -448,7 +454,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     className="rounded-full px-3.5 h-7 text-xs font-medium border-primary text-primary hover:bg-primary/10"
                   >
                     <RefreshCw className="mr-1 h-3.5 w-3.5" />
-                    更新商店
+                    {t('更新商店')}
                   </Button>
                 )}
               </div>
@@ -458,13 +464,13 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
         <DialogFooter className="shrink-0">
           <Button variant="outline" onClick={onClose} disabled={saving}>
-            取消
+            {t('取消')}
           </Button>
           <Button onClick={handleSave} disabled={saving || loading}>
             {saving && (
               <Loader2 className="-ml-1 mr-2 h-4 w-4 animate-spin" />
             )}
-            保存
+            {t('保存')}
           </Button>
         </DialogFooter>
       </DialogContent>

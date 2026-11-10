@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
 	"fnos-store/internal/cache"
 	"fnos-store/internal/config"
 	"fnos-store/internal/core"
@@ -31,6 +32,8 @@ type Server struct {
 	platform          string
 	storeApp          string
 	staticFS          fs.FS
+	gatewayMode       bool
+	gatewayCSRFToken  string
 	lastCheck         time.Time
 	statusByApp       map[string]string
 	recommendedApps   []source.RecommendedApp
@@ -52,6 +55,7 @@ type Config struct {
 	Platform          string
 	StoreApp          string
 	StaticFS          fs.FS
+	GatewayMode       bool
 }
 
 func NewServer(cfg Config) *Server {
@@ -78,8 +82,12 @@ func NewServer(cfg Config) *Server {
 		platform:         cfg.Platform,
 		storeApp:         cfg.StoreApp,
 		staticFS:         cfg.StaticFS,
+		gatewayMode:      cfg.GatewayMode,
 		statusByApp:      make(map[string]string),
 		refreshDebouncer: &refreshDebouncer{},
+	}
+	if cfg.GatewayMode {
+		s.gatewayCSRFToken = rand.Text()
 	}
 	s.routes()
 	_ = s.refreshRecommended(context.Background())
@@ -88,6 +96,7 @@ func NewServer(cfg Config) *Server {
 }
 
 func (s *Server) routes() {
+	s.Mux.HandleFunc("GET /api/csrf", s.handleCSRFToken)
 	s.Mux.HandleFunc("GET /api/apps", s.handleListApps)
 	s.Mux.HandleFunc("GET /api/recommended", s.handleListRecommended)
 	s.Mux.HandleFunc("POST /api/apps/{appname}/install", s.handleInstall)

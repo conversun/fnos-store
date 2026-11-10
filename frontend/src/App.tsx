@@ -16,12 +16,14 @@ import { Toaster } from "@/components/ui/sonner"
 import { ReportFailureDialog } from './components/ReportFailureDialog';
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { LocalizedDialogContent as DialogContent } from './components/LocalizedDialogContent';
+import { LocalizedSheetContent as SheetContent } from './components/LocalizedSheetContent';
+import { Sheet, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip"
+import { t, useLocale, localizeMessage, stepText } from '@/lib/i18n';
 import { cn } from "@/lib/utils"
 import {
   Select,
@@ -57,6 +59,11 @@ type CategoryKey = typeof CATEGORIES[number]['key'];
 type SortKey = 'default' | 'downloads' | 'name' | 'updated';
 
 const App: React.FC = () => {
+  const locale = useLocale();
+  useEffect(() => {
+    document.documentElement.lang = locale;
+    document.title = `fnOS Apps - ${t('应用商店')}`;
+  }, [locale]);
   const [apps, setApps] = useState<AppInfo[]>([]);
   // false on fnOS builds whose update path destroys the app (see backend
   // platform.UpgradeCapability). Surfaced so the UI does not offer an update
@@ -160,27 +167,15 @@ const App: React.FC = () => {
       } catch {
         retries++;
         if (retries > 30) {
-          setSelfUpdateState({ message: '重启超时，请手动刷新页面', progress: 100 });
+          setSelfUpdateState({ message: t('重启超时，请手动刷新页面'), progress: 100 });
           return;
         }
-        setSelfUpdateState({ message: '正在重启...', progress: 100 });
+        setSelfUpdateState({ message: t('正在重启...'), progress: 100 });
         pollTimerRef.current = setTimeout(poll, 2000);
       }
     };
     pollTimerRef.current = setTimeout(poll, 2000);
   }, []);
-
-  const translateStep = (step?: string) => {
-      switch(step) {
-          case 'downloading': return '正在下载...';
-          case 'pulling': return '正在拉取镜像...';
-          case 'installing': return '正在安装...';
-          case 'verifying': return '正在验证...';
-          case 'starting': return '正在启动...';
-          case 'uninstalling': return '正在卸载...';
-          default: return '处理中...';
-      }
-  };
 
   const loadApps = async (autoReload = true) => {
     try {
@@ -239,7 +234,7 @@ const App: React.FC = () => {
 
     handle.promise.catch(() => {
       setLoadStatus('failed');
-      setLoadMessages(prev => [...prev, { text: '网络连接失败', status: 'error' }]);
+      setLoadMessages(prev => [...prev, { text: t('网络连接失败'), status: 'error' }]);
     }).finally(() => {
       if (reloadHandleRef.current === handle) {
         reloadHandleRef.current = null;
@@ -254,17 +249,18 @@ const App: React.FC = () => {
       setSelfUpdateActive(true);
       selfUpdateActiveRef.current = true;
       selfUpdateRestartSeenRef.current = true;
-      setSelfUpdateState({ message: data.message || '商店正在更新，请稍候...', progress: 100 });
+      setSelfUpdateState({ message: data.message || t('商店正在更新，请稍候...'), progress: 100 });
       pollForRestart();
       return;
     }
 
     if (data.step === 'error') {
       const lastStep = appOperationsRef.current.get(appname)?.step || 'starting';
-      toast.error(data.message || '发生未知错误', {
+      toast.error(t('应用操作失败'), {
+        description: `${t('原始诊断信息')}: ${data.message || t('发生未知错误')}`,
         action: {
-          label: '上报',
-          onClick: () => setReportTarget({ app: appname, step: lastStep, error: data.message || '发生未知错误' })
+          label: t('上报'),
+          onClick: () => setReportTarget({ app: appname, step: lastStep, error: data.message || t('发生未知错误') })
         }
       });
       setAppOp(appname, null);
@@ -277,7 +273,7 @@ const App: React.FC = () => {
       loadApps();
 
       if (operation === 'uninstall') {
-        toast.success(`${app.display_name} 已卸载`);
+        toast.success(t('{name} 已卸载', { name: app.display_name }));
       } else {
         setSuccessInfo({ app, operation });
       }
@@ -287,7 +283,7 @@ const App: React.FC = () => {
     setAppOp(appname, {
       step: data.step || 'processing',
       progress: data.progress || 0,
-      message: data.message || translateStep(data.step),
+      message: data.message || stepText(data.step),
       speed: data.speed,
       downloaded: data.downloaded,
       total: data.total,
@@ -301,7 +297,7 @@ const App: React.FC = () => {
       await loadApps();
     } catch (error) {
       console.error('Check failed:', error);
-      toast.error('检查更新失败');
+      toast.error(t('检查更新失败'));
     } finally {
       setChecking(false);
     }
@@ -317,7 +313,7 @@ const App: React.FC = () => {
     setAppOp(appname, {
       step: 'starting',
       progress: 0,
-      message: `正在安装 ${app.display_name}...`,
+      message: t('正在安装 {name}...', { name: app.display_name }),
       cancel: handle.cancel,
     });
 
@@ -325,7 +321,7 @@ const App: React.FC = () => {
       await handle.promise;
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
-        toast.info('已取消');
+        toast.info(t('已取消'));
         setAppOp(appname, null);
         return;
       }
@@ -336,9 +332,9 @@ const App: React.FC = () => {
         return;
       }
       console.error(error);
-      toast.error('安装请求失败', {
+      toast.error(t('安装请求失败'), {
         action: {
-          label: '上报',
+          label: t('上报'),
           onClick: () => setReportTarget({ app: app.appname, step: 'request', error: error instanceof Error ? error.message : String(error) })
         }
       });
@@ -389,7 +385,7 @@ const App: React.FC = () => {
     setAppOp(appname, {
       step: 'starting',
       progress: 0,
-      message: `正在更新 ${app.display_name}...`,
+      message: t('正在更新 {name}...', { name: app.display_name }),
       cancel: handle.cancel,
     });
 
@@ -397,7 +393,7 @@ const App: React.FC = () => {
       await handle.promise;
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
-        toast.info('已取消');
+        toast.info(t('已取消'));
         setAppOp(appname, null);
         return;
       }
@@ -405,9 +401,9 @@ const App: React.FC = () => {
         return;
       }
       console.error(error);
-      toast.error('更新请求失败', {
+      toast.error(t('更新请求失败'), {
         action: {
-          label: '上报',
+          label: t('上报'),
           onClick: () => setReportTarget({ app: app.appname, step: 'request', error: error instanceof Error ? error.message : String(error) })
         }
       });
@@ -440,7 +436,7 @@ const App: React.FC = () => {
     setAppOp(appname, {
       step: 'uninstalling',
       progress: 0,
-      message: `正在卸载 ${app.display_name}...`,
+      message: t('正在卸载 {name}...', { name: app.display_name }),
     });
 
     const handle = uninstallApp(appname, handler);
@@ -449,14 +445,14 @@ const App: React.FC = () => {
       await handle.promise;
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
-        toast.info('已取消');
+        toast.info(t('已取消'));
         setAppOp(appname, null);
         return;
       }
       console.error(error);
-      toast.error('卸载请求失败', {
+      toast.error(t('卸载请求失败'), {
         action: {
-          label: '上报',
+          label: t('上报'),
           onClick: () => setReportTarget({ app: app.appname, step: 'request', error: error instanceof Error ? error.message : String(error) })
         }
       });
@@ -482,16 +478,18 @@ const App: React.FC = () => {
     if (!pendingCleanupApp) return;
     const app = pendingCleanupApp;
     setPendingCleanupApp(null);
-    toast.info(`正在清理 ${app.display_name} 的残留...`);
+    toast.info(t('正在清理 {name} 的残留...', { name: app.display_name }));
     try {
       const res = await cleanupApp(app.appname);
       if (res.warning) {
-        toast.warning(`已清理，但 ${res.warning}`);
+        toast.warning(t('已清理，但 {warning}', { warning: localizeMessage(res.warning) }));
       } else {
-        toast.success(`已清理 ${app.display_name} 残留（${res.removed.length} 项）`);
+        toast.success(t('已清理 {name} 残留（{count} 项）', { name: app.display_name, count: res.removed.length }));
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : '清理失败');
+      toast.error(t('清理失败'), {
+        description: e instanceof Error ? `${t('原始诊断信息')}: ${e.message}` : undefined,
+      });
     }
     loadApps(false);
   }, [pendingCleanupApp]);
@@ -500,7 +498,7 @@ const App: React.FC = () => {
     const op = appOperations.get(app.appname);
     if (op?.cancel) {
       op.cancel();
-      toast.info('已取消');
+      toast.info(t('已取消'));
       setAppOp(app.appname, null);
       loadApps();
     }
@@ -510,9 +508,9 @@ const App: React.FC = () => {
     try {
       await ignoreUpdate(app.appname);
       await loadApps();
-      toast.success(`${app.display_name} 已忽略更新`);
+      toast.success(t('{name} 已忽略更新', { name: app.display_name }));
     } catch {
-      toast.error('忽略更新失败');
+      toast.error(t('忽略更新失败'));
     }
   }, []);
 
@@ -520,33 +518,35 @@ const App: React.FC = () => {
     try {
       await unignoreUpdate(app.appname);
       await loadApps();
-      toast.success(`${app.display_name} 已取消忽略更新`);
+      toast.success(t('{name} 已取消忽略更新', { name: app.display_name }));
     } catch {
-      toast.error('取消忽略更新失败');
+      toast.error(t('取消忽略更新失败'));
     }
   }, []);
 
   const handleStoreUpdate = useCallback(async () => {
     setSelfUpdateActive(true);
     selfUpdateActiveRef.current = true;
-    setSelfUpdateState({ message: '正在更新商店...', progress: 0 });
+    setSelfUpdateState({ message: t('正在更新商店...'), progress: 0 });
 
     const handle = triggerStoreUpdate((data) => {
       if (data.step === 'self_update') {
         selfUpdateRestartSeenRef.current = true;
-        setSelfUpdateState({ message: '商店正在重启...', progress: 100 });
+        setSelfUpdateState({ message: t('商店正在重启...'), progress: 100 });
         pollForRestart();
         return;
       }
       if (data.step === 'error') {
-        toast.error(data.message || '商店更新失败');
+        toast.error(t('商店更新失败'), {
+          description: data.message ? `${t('原始诊断信息')}: ${data.message}` : undefined,
+        });
         setSelfUpdateActive(false);
         selfUpdateActiveRef.current = false;
         setSelfUpdateState(null);
         return;
       }
       setSelfUpdateState({
-        message: data.message || '正在更新商店...',
+        message: stepText(data.step),
         progress: data.progress || 0,
         speed: data.speed,
         downloaded: data.downloaded,
@@ -565,7 +565,7 @@ const App: React.FC = () => {
         return;
       }
       console.error(error);
-      toast.error('商店更新失败');
+      toast.error(t('商店更新失败'));
       setSelfUpdateActive(false);
       selfUpdateActiveRef.current = false;
       setSelfUpdateState(null);
@@ -614,24 +614,24 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row">
       <aside className={cn(
-        "hidden md:flex flex-col bg-card border-r border-border h-screen sticky top-0 transition-all duration-300 overflow-hidden",
+        "hidden md:flex shrink-0 flex-col bg-card border-r border-border h-screen sticky top-0 transition-all duration-300 overflow-hidden",
         sidebarCollapsed ? "w-[68px]" : "w-64"
       )}>
         <TooltipProvider delayDuration={0}>
          <div className={cn("border-b border-border shrink-0", sidebarCollapsed ? "p-3 flex items-center justify-center" : "p-6")}>
            {sidebarCollapsed ? (
-             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleSidebar}>
+             <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('展开侧栏')} title={t('展开侧栏')} onClick={toggleSidebar}>
                <ChevronsRight className="h-4 w-4" />
              </Button>
            ) : (
              <div className="flex items-start justify-between gap-2">
                <div className="min-w-0">
                  <h1 className="text-xl font-semibold tracking-tight whitespace-nowrap">fnOS Apps</h1>
-                 <p className="text-sm text-muted-foreground mt-1.5 whitespace-nowrap">
-                    上次检查: {lastCheck ? new Date(lastCheck).toLocaleString() : '从未'}
+                 <p className="text-sm text-muted-foreground mt-1.5 break-words">
+                    {t('上次检查')}: {lastCheck ? new Date(lastCheck).toLocaleString(locale) : t('从未')}
                  </p>
                </div>
-               <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 -mr-2 -mt-1" onClick={toggleSidebar}>
+               <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 -mr-2 -mt-1" aria-label={t('收起侧栏')} title={t('收起侧栏')} onClick={toggleSidebar}>
                  <ChevronsLeft className="h-4 w-4" />
                </Button>
              </div>
@@ -650,13 +650,13 @@ const App: React.FC = () => {
                   <Compass className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
                   {!sidebarCollapsed && (
                     <>
-                      <span className="flex-1 text-left whitespace-nowrap">发现</span>
+                      <span className="flex-1 text-left whitespace-nowrap">{t('发现')}</span>
                       <span className="ml-auto text-xs opacity-80 tabular-nums">{counts.recommended}</span>
                     </>
                   )}
                 </Button>
               </TooltipTrigger>
-              {sidebarCollapsed && <TooltipContent side="right">发现 ({counts.recommended})</TooltipContent>}
+              {sidebarCollapsed && <TooltipContent side="right">{t('发现')} ({counts.recommended})</TooltipContent>}
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -668,13 +668,13 @@ const App: React.FC = () => {
                   <LayoutGrid className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
                   {!sidebarCollapsed && (
                     <>
-                      <span className="flex-1 text-left whitespace-nowrap">全部</span>
+                      <span className="flex-1 text-left whitespace-nowrap">{t('全部')}</span>
                       <span className="ml-auto text-xs text-muted-foreground tabular-nums">{counts.all}</span>
                     </>
                   )}
                 </Button>
               </TooltipTrigger>
-              {sidebarCollapsed && <TooltipContent side="right">全部 ({counts.all})</TooltipContent>}
+              {sidebarCollapsed && <TooltipContent side="right">{t('全部')} ({counts.all})</TooltipContent>}
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -686,13 +686,13 @@ const App: React.FC = () => {
                   <CheckCircle2 className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
                   {!sidebarCollapsed && (
                     <>
-                      <span className="flex-1 text-left whitespace-nowrap">已安装</span>
+                      <span className="flex-1 text-left whitespace-nowrap">{t('已安装')}</span>
                       <span className="ml-auto text-xs text-muted-foreground tabular-nums">{counts.installed}</span>
                     </>
                   )}
                 </Button>
               </TooltipTrigger>
-              {sidebarCollapsed && <TooltipContent side="right">已安装 ({counts.installed})</TooltipContent>}
+              {sidebarCollapsed && <TooltipContent side="right">{t('已安装')} ({counts.installed})</TooltipContent>}
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -709,7 +709,7 @@ const App: React.FC = () => {
                   </div>
                   {!sidebarCollapsed && (
                     <>
-                      <span className="flex-1 text-left whitespace-nowrap">有更新</span>
+                      <span className="flex-1 text-left whitespace-nowrap">{t('有更新')}</span>
                       {counts.update_available > 0 ? (
                         <Badge variant="destructive" className="ml-auto shrink-0">{counts.update_available}</Badge>
                       ) : (
@@ -720,7 +720,7 @@ const App: React.FC = () => {
                 </Button>
               </TooltipTrigger>
               {sidebarCollapsed && (
-                <TooltipContent side="right">有更新 ({counts.update_available})</TooltipContent>
+                <TooltipContent side="right">{t('有更新')} ({counts.update_available})</TooltipContent>
               )}
             </Tooltip>
           </nav>
@@ -728,7 +728,7 @@ const App: React.FC = () => {
           {activeFilter !== 'recommended' && (
             <div className={cn("border-t border-border", sidebarCollapsed ? "p-2 pt-3" : "px-4 pb-4 pt-3")}>
               {!sidebarCollapsed && (
-                <p className="text-xs font-medium text-muted-foreground mb-2 px-3">分类</p>
+                <p className="text-xs font-medium text-muted-foreground mb-2 px-3">{t('分类')}</p>
               )}
               <div className="space-y-1">
                 <Tooltip>
@@ -740,11 +740,11 @@ const App: React.FC = () => {
                     >
                       <LayoutList className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
                       {!sidebarCollapsed && (
-                        <span className="flex-1 text-left whitespace-nowrap">全部</span>
+                        <span className="flex-1 text-left whitespace-nowrap">{t('全部')}</span>
                       )}
                     </Button>
                   </TooltipTrigger>
-                  {sidebarCollapsed && <TooltipContent side="right">全部</TooltipContent>}
+                  {sidebarCollapsed && <TooltipContent side="right">{t('全部')}</TooltipContent>}
                 </Tooltip>
                 {CATEGORIES.map(cat => {
                   const Icon = cat.icon;
@@ -761,13 +761,13 @@ const App: React.FC = () => {
                           <Icon className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
                           {!sidebarCollapsed && (
                             <>
-                              <span className="flex-1 text-left whitespace-nowrap">{cat.label}</span>
+                              <span className="flex-1 text-left whitespace-nowrap">{t(cat.label)}</span>
                               <span className="ml-auto text-xs text-muted-foreground tabular-nums">{count}</span>
                             </>
                           )}
                         </Button>
                       </TooltipTrigger>
-                      {sidebarCollapsed && <TooltipContent side="right">{cat.label} ({count})</TooltipContent>}
+                      {sidebarCollapsed && <TooltipContent side="right">{t(cat.label)} ({count})</TooltipContent>}
                     </Tooltip>
                   );
                 })}
@@ -788,10 +788,10 @@ const App: React.FC = () => {
                   onClick={() => window.open('https://github.com/conversun/fnos-apps/issues/new?template=bug-report.yml', '_blank')}
                 >
                   <MessageCircle className={cn("h-4 w-4 shrink-0", !sidebarCollapsed && "mr-3")} />
-                  {!sidebarCollapsed && <span className="flex-1 text-left whitespace-nowrap">问题反馈</span>}
+                  {!sidebarCollapsed && <span className="flex-1 text-left whitespace-nowrap">{t('问题反馈')}</span>}
                 </Button>
               </TooltipTrigger>
-              {sidebarCollapsed && <TooltipContent side="right">问题反馈</TooltipContent>}
+              {sidebarCollapsed && <TooltipContent side="right">{t('问题反馈')}</TooltipContent>}
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -809,30 +809,31 @@ const App: React.FC = () => {
                       <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-destructive" />
                     )}
                   </div>
-                  {!sidebarCollapsed && <span className="flex-1 text-left whitespace-nowrap">设置</span>}
+                  {!sidebarCollapsed && <span className="flex-1 text-left whitespace-nowrap">{t('设置')}</span>}
                 </Button>
               </TooltipTrigger>
-              {sidebarCollapsed && <TooltipContent side="right">设置{storeHasUpdate ? ' (有更新)' : ''}</TooltipContent>}
+              {sidebarCollapsed && <TooltipContent side="right">{t('设置')}{storeHasUpdate ? ` (${t('有更新')})` : ''}</TooltipContent>}
             </Tooltip>
          </div>
         </TooltipProvider>
        </aside>
 
-      <div className="flex-1 flex flex-col min-h-0 md:min-h-screen">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 md:min-h-screen">
         <div className="md:hidden bg-card border-b border-border p-4 sticky top-0 z-20 flex flex-col gap-3">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                         <SheetTrigger asChild>
-                            <Button variant="ghost" size="icon">
+                            <Button variant="ghost" size="icon" aria-label={t('打开导航')}>
                                 <Menu className="h-5 w-5" />
                             </Button>
                         </SheetTrigger>
                         <SheetContent side="left" className="w-64 p-0 flex flex-col h-full">
+                             <SheetTitle className="sr-only">{t('导航')}</SheetTitle>
                              <div className="p-6 border-b border-border shrink-0">
                                 <h1 className="text-xl font-semibold tracking-tight">fnOS Apps</h1>
                                 <p className="text-sm text-muted-foreground mt-1.5">
-                                   上次检查: {lastCheck ? new Date(lastCheck).toLocaleString() : '从未'}
+                                   {t('上次检查')}: {lastCheck ? new Date(lastCheck).toLocaleString(locale) : t('从未')}
                                 </p>
                              </div>
                              <div className="flex-1 overflow-y-auto min-h-0">
@@ -843,7 +844,7 @@ const App: React.FC = () => {
                                    onClick={() => { setActiveFilter('recommended'); setActiveCategory(null); setMobileMenuOpen(false); }}
                                  >
                                     <Compass className="mr-3 h-4 w-4 shrink-0" />
-                                    <span className="flex-1 text-left">发现</span>
+                                    <span className="flex-1 text-left">{t('发现')}</span>
                                     <span className="ml-auto text-xs opacity-80 tabular-nums">{counts.recommended}</span>
                                  </Button>
                                  <Button
@@ -852,7 +853,7 @@ const App: React.FC = () => {
                                    onClick={() => { setActiveFilter('all'); setMobileMenuOpen(false); }}
                                  >
                                     <LayoutGrid className="mr-3 h-4 w-4 shrink-0" />
-                                    <span className="flex-1 text-left">全部</span>
+                                    <span className="flex-1 text-left">{t('全部')}</span>
                                     <span className="ml-auto text-xs text-muted-foreground tabular-nums">{counts.all}</span>
                                  </Button>
                                  <Button
@@ -861,7 +862,7 @@ const App: React.FC = () => {
                                    onClick={() => { setActiveFilter('installed'); setMobileMenuOpen(false); }}
                                  >
                                     <CheckCircle2 className="mr-3 h-4 w-4 shrink-0" />
-                                    <span className="flex-1 text-left">已安装</span>
+                                    <span className="flex-1 text-left">{t('已安装')}</span>
                                     <span className="ml-auto text-xs text-muted-foreground tabular-nums">{counts.installed}</span>
                                  </Button>
                                  <Button
@@ -870,7 +871,7 @@ const App: React.FC = () => {
                                    onClick={() => { setActiveFilter('update_available'); setMobileMenuOpen(false); }}
                                  >
                                     <RefreshCw className="mr-3 h-4 w-4 shrink-0" />
-                                    <span className="flex-1 text-left">有更新</span>
+                                    <span className="flex-1 text-left">{t('有更新')}</span>
                                     {counts.update_available > 0 ? (
                                       <Badge variant="destructive" className="ml-auto shrink-0">{counts.update_available}</Badge>
                                     ) : (
@@ -880,7 +881,7 @@ const App: React.FC = () => {
                               </nav>
                               {activeFilter !== 'recommended' && (
                                 <div className="px-4 pt-3 border-t border-border pb-4">
-                                  <p className="text-xs font-medium text-muted-foreground mb-2 px-3">分类</p>
+                                  <p className="text-xs font-medium text-muted-foreground mb-2 px-3">{t('分类')}</p>
                                   <div className="space-y-1">
                                     <Button
                                       variant={activeCategory === null ? 'secondary' : 'ghost'}
@@ -888,7 +889,7 @@ const App: React.FC = () => {
                                       onClick={() => { setActiveCategory(null); setMobileMenuOpen(false); }}
                                     >
                                       <LayoutList className="mr-3 h-4 w-4 shrink-0" />
-                                      <span className="flex-1 text-left">全部</span>
+                                      <span className="flex-1 text-left">{t('全部')}</span>
                                     </Button>
                                     {CATEGORIES.map(cat => {
                                       const Icon = cat.icon;
@@ -902,7 +903,7 @@ const App: React.FC = () => {
                                           onClick={() => { setActiveCategory(cat.key); setMobileMenuOpen(false); }}
                                         >
                                           <Icon className="mr-3 h-4 w-4 shrink-0" />
-                                          <span className="flex-1 text-left">{cat.label}</span>
+                                          <span className="flex-1 text-left">{t(cat.label)}</span>
                                           <span className="ml-auto text-xs text-muted-foreground tabular-nums">{count}</span>
                                         </Button>
                                       );
@@ -919,7 +920,7 @@ const App: React.FC = () => {
                                    onClick={() => window.open('https://github.com/conversun/fnos-apps/issues/new?template=bug-report.yml', '_blank')}
                                  >
                                     <MessageCircle className="mr-3 h-4 w-4 shrink-0" />
-                                    <span className="flex-1 text-left">问题反馈</span>
+                                    <span className="flex-1 text-left">{t('问题反馈')}</span>
                                  </Button>
                                  <Button
                                    variant="ghost"
@@ -932,7 +933,7 @@ const App: React.FC = () => {
                                         <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-destructive" />
                                       )}
                                     </div>
-                                    <span className="flex-1 text-left">设置</span>
+                                    <span className="flex-1 text-left">{t('设置')}</span>
                                  </Button>
                               </div>
                         </SheetContent>
@@ -944,7 +945,7 @@ const App: React.FC = () => {
                   size="icon"
                   onClick={handleCheck}
                   disabled={checking}
-                  aria-label="检查更新"
+                  aria-label={t('检查更新')}
                 >
                   <RefreshCw className={cn("h-5 w-5", checking && "animate-spin")} />
                 </Button>
@@ -955,14 +956,16 @@ const App: React.FC = () => {
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                   <Input
                     type="text"
-                    placeholder="搜索应用..."
+                    aria-label={t('搜索应用...')}
+                       placeholder={t('搜索应用...')}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-8 pr-8 h-9 shadow-none"
                   />
                   {searchQuery && (
                     <button
-                      onClick={() => setSearchQuery('')}
+                      aria-label={t('清除搜索')}
+                         onClick={() => setSearchQuery('')}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     >
                       <X className="h-4 w-4" />
@@ -970,46 +973,48 @@ const App: React.FC = () => {
                   )}
                 </div>
                 <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
-                  <SelectTrigger className="w-full h-9 shadow-none">
+                  <SelectTrigger aria-label={t('排序')} className="w-full h-9 shadow-none">
                     <ArrowUpDown className="h-3.5 w-3.5 mr-1.5" />
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="default">默认</SelectItem>
-                    <SelectItem value="downloads">下载量</SelectItem>
-                    <SelectItem value="name">名称</SelectItem>
-                    <SelectItem value="updated">最近更新</SelectItem>
+                    <SelectItem value="default">{t('默认')}</SelectItem>
+                    <SelectItem value="downloads">{t('下载量')}</SelectItem>
+                    <SelectItem value="name">{t('名称')}</SelectItem>
+                    <SelectItem value="updated">{t('最近更新')}</SelectItem>
                   </SelectContent>
                 </Select>
               </>
             )}
         </div>
 
-        <header className="hidden md:flex bg-card border-b border-border px-8 py-4 justify-between items-center sticky top-0 z-10">
+        <header className="hidden md:flex flex-wrap gap-4 bg-card border-b border-border px-8 py-4 justify-between items-center sticky top-0 z-10">
            <h2 className="text-lg font-medium shrink-0">
-              {activeFilter === 'recommended' && '发现应用'}
-              {activeFilter === 'all' && '全部应用'}
-              {activeFilter === 'installed' && '已安装应用'}
-              {activeFilter === 'update_available' && '可用更新'}
+              {activeFilter === 'recommended' && t('发现应用')}
+              {activeFilter === 'all' && t('全部应用')}
+              {activeFilter === 'installed' && t('已安装应用')}
+              {activeFilter === 'update_available' && t('可用更新')}
               {activeFilter !== 'recommended' && activeCategory && (
-                <span className="text-muted-foreground font-normal">{' · '}{CATEGORIES.find(c => c.key === activeCategory)?.label}</span>
+                <span className="text-muted-foreground font-normal">{' · '}{t(CATEGORIES.find(c => c.key === activeCategory)?.label ?? '全部')}</span>
               )}
            </h2>
-           <div className="flex items-center gap-3">
+           <div className="flex flex-wrap items-center gap-3">
                {activeFilter !== 'recommended' && (
                  <>
                    <div className="relative">
                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                      <Input
                        type="text"
-                       placeholder="搜索应用..."
+                       aria-label={t('搜索应用...')}
+                    placeholder={t('搜索应用...')}
                        value={searchQuery}
                        onChange={(e) => setSearchQuery(e.target.value)}
                         className="w-56 pl-8 pr-8 h-9 shadow-none"
                      />
                      {searchQuery && (
                        <button
-                         onClick={() => setSearchQuery('')}
+                         aria-label={t('清除搜索')}
+                      onClick={() => setSearchQuery('')}
                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                        >
                          <X className="h-4 w-4" />
@@ -1017,15 +1022,15 @@ const App: React.FC = () => {
                      )}
                    </div>
                    <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
-                     <SelectTrigger className="w-32 h-9 shadow-none">
+                     <SelectTrigger aria-label={t('排序')} className="w-32 h-9 shadow-none">
                        <ArrowUpDown className="h-3.5 w-3.5 mr-1.5" />
                        <SelectValue />
                      </SelectTrigger>
                      <SelectContent>
-                       <SelectItem value="default">默认</SelectItem>
-                       <SelectItem value="downloads">下载量</SelectItem>
-                       <SelectItem value="name">名称</SelectItem>
-                       <SelectItem value="updated">最近更新</SelectItem>
+                       <SelectItem value="default">{t('默认')}</SelectItem>
+                       <SelectItem value="downloads">{t('下载量')}</SelectItem>
+                       <SelectItem value="name">{t('名称')}</SelectItem>
+                       <SelectItem value="updated">{t('最近更新')}</SelectItem>
                      </SelectContent>
                    </Select>
                  </>
@@ -1037,12 +1042,12 @@ const App: React.FC = () => {
                  {checking ? (
                    <>
                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                     检查中...
+                     {t('检查中...')}
                    </>
                  ) : (
                    <>
                      <RefreshCw className="mr-2 h-4 w-4" />
-                     立即检查
+                     {t('立即检查')}
                    </>
                  )}
                </Button>
@@ -1060,8 +1065,8 @@ const App: React.FC = () => {
             ) : (
               <div className="flex flex-col items-center justify-center h-64">
                 <Compass className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                <p className="text-muted-foreground font-medium">暂无推荐应用</p>
-                <p className="text-sm text-muted-foreground mt-1">请稍后再来看看</p>
+                <p className="text-muted-foreground font-medium">{t('暂无推荐应用')}</p>
+                <p className="text-sm text-muted-foreground mt-1">{t('请稍后再来看看')}</p>
               </div>
             )
           ) : loadStatus === 'loaded' ? (
@@ -1082,7 +1087,7 @@ const App: React.FC = () => {
           ) : loadStatus === 'loading' ? (
             <div className="flex flex-col items-center justify-center h-64">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
-              <p className="text-sm text-muted-foreground">正在加载应用列表...</p>
+              <p className="text-sm text-muted-foreground">{t('正在加载应用列表...')}</p>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-64 max-w-sm mx-auto">
@@ -1108,7 +1113,7 @@ const App: React.FC = () => {
                       msg.status === 'error' ? 'text-destructive' :
                       msg.status === 'success' ? 'text-emerald-500' :
                       'text-muted-foreground'
-                    )}>{msg.text}</span>
+                    )}>{localizeMessage(msg.text)}</span>
                   </div>
                 ))}
               </div>
@@ -1116,11 +1121,11 @@ const App: React.FC = () => {
                 <div className="flex gap-2">
                   <Button size="sm" onClick={triggerReload}>
                     <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                    重试
+                    {t('重试')}
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => setSettingsVisible(true)}>
                     <Settings className="mr-1.5 h-3.5 w-3.5" />
-                    更换加速节点
+                    {t('更换加速节点')}
                   </Button>
                 </div>
               )}
@@ -1171,15 +1176,15 @@ const App: React.FC = () => {
       <AlertDialog open={!!pendingUninstallApp} onOpenChange={(open) => !open && setPendingUninstallApp(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>确认卸载</AlertDialogTitle>
+            <AlertDialogTitle>{t('确认卸载')}</AlertDialogTitle>
             <AlertDialogDescription>
-              确定要卸载 {pendingUninstallApp?.display_name} 吗？此操作无法撤销。
+              {t('确定要卸载 {name} 吗？此操作无法撤销。', { name: pendingUninstallApp?.display_name ?? '' })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel>{t('取消')}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmUninstall}>
-              确认卸载
+              {t('确认卸载')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1188,15 +1193,15 @@ const App: React.FC = () => {
       <AlertDialog open={!!pendingCleanupApp} onOpenChange={(open) => !open && setPendingCleanupApp(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>确认清理残留</AlertDialogTitle>
+            <AlertDialogTitle>{t('确认清理残留')}</AlertDialogTitle>
             <AlertDialogDescription>
-              {pendingCleanupApp?.display_name} 在应用中心已无注册（卸载会失败），此操作将删除其磁盘残留（含数据目录）。确定继续吗？
+              {t('{name} 在应用中心已无注册（卸载会失败），此操作将删除其磁盘残留（含数据目录）。确定继续吗？', { name: pendingCleanupApp?.display_name ?? '' })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel>{t('取消')}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmCleanup}>
-              确认清理
+              {t('确认清理')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1235,7 +1240,7 @@ const App: React.FC = () => {
                   <div className="flex items-center gap-1.5 mt-1">
                     <CircleCheck className="h-3.5 w-3.5 text-emerald-500" />
                     <span className="text-sm text-emerald-600">
-                      {successInfo.operation === 'install' ? '安装成功' : '更新成功'}
+                      {successInfo.operation === 'install' ? t('安装成功') : t('更新成功')}
                     </span>
                   </div>
                 </div>
@@ -1260,7 +1265,7 @@ const App: React.FC = () => {
                   }}
                 >
                   <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                  打开
+                  {t('打开')}
                 </Button>
               )}
               <Button
@@ -1268,7 +1273,7 @@ const App: React.FC = () => {
                 className="rounded-full px-4"
                 onClick={() => setSuccessInfo(null)}
               >
-                确定
+                {t('确定')}
               </Button>
             </div>
           </DialogContent>
@@ -1282,7 +1287,7 @@ const App: React.FC = () => {
         step={reportTarget?.step || ''}
         errorMessage={reportTarget?.error || ''}
       />
-      <Toaster />
+      <Toaster containerAriaLabel={t('通知')} />
     </div>
   );
 };

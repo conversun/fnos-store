@@ -6,10 +6,11 @@
             "desc": "fnOS Apps",
             "icon": "images/{0}.png",
             "type": "iframe",
-            "port": "8011",
-            "protocol": "http",
-            "url": "/",
-            "allUsers": true
+            "protocol": "",
+            "gatewayPrefix": "/app/fnos-apps-store",
+            "gatewaySocket": "app.sock",
+            "url": "/app/fnos-apps-store/",
+            "allUsers": false
         }
     }
 }

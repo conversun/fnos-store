@@ -1,10 +1,12 @@
+import { InstallationType } from './InstallationType';
+import { LocalizedDialogContent as DialogContent } from './LocalizedDialogContent';
+import { t, useLocale, stepText } from '@/lib/i18n';
 import React from 'react';
 import type { AppInfo, AppOperation } from '../api/client';
 import { availableVersionLabel, installedVersionLabel } from '../api/client';
 import { apiUrl } from '../api/base';
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -52,6 +54,7 @@ const DetailRow: React.FC<{ icon: React.ElementType; label: string; children: Re
 );
 
 const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChange, onInstall, onUpdate, onIgnoreUpdate, onUnignoreUpdate, onUninstall, operation }) => {
+  const locale = useLocale();
   if (!app) return null;
 
   const isInstalled = app.installed;
@@ -67,16 +70,16 @@ const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChan
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'running': return '运行中';
-      case 'stopped': return '已停止';
-      default: return status || '未安装';
+      case 'running': return t('运行中');
+      case 'stopped': return t('已停止');
+      default: return status || t('未安装');
     }
   };
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '-';
     try {
-      return new Date(dateStr).toLocaleString('zh-CN', {
+      return new Date(dateStr).toLocaleString(locale, {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
@@ -90,7 +93,7 @@ const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChan
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3">
             {app.icon_url ? (
@@ -113,17 +116,17 @@ const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChan
                     <span>{getStatusText(app.status)}</span>
                   </div>
                 ) : (
-                  <span className="text-xs text-muted-foreground/50">未安装</span>
+                  <span className="text-xs text-muted-foreground/50">{t('未安装')}</span>
                 )}
                 {canUpdate && (
                   <Badge variant="secondary" className="bg-primary/10 text-primary border-0 font-medium px-1.5 h-5 text-[11px] rounded-full">
-                    有更新
+                    {t('有更新')}
                   </Badge>
                 )}
                 {app.update_ignored && (
                   <Badge variant="secondary" className="bg-muted text-muted-foreground border-0 font-medium px-1.5 h-5 text-[11px] rounded-full gap-0.5">
                     <BellOff className="h-2.5 w-2.5" />
-                    已忽略更新
+                    {t('已忽略更新')}
                   </Badge>
                 )}
               </div>
@@ -141,7 +144,12 @@ const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChan
         )}
 
         <div className="space-y-0">
-          <DetailRow icon={Tag} label="版本">
+          {(app.app_type === 'native' || app.app_type === 'docker') && (
+            <DetailRow icon={Package} label={t('安装类型')}>
+              <InstallationType appType={app.app_type} />
+            </DetailRow>
+          )}
+          <DetailRow icon={Tag} label={t('版本')}>
             <div className="flex items-center gap-2 flex-wrap">
               <span>{isInstalled ? `v${installedVersionLabel(app)}` : `v${app.latest_version}`}</span>
               {canUpdate && (
@@ -151,27 +159,27 @@ const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChan
                 </>
               )}
               {!isInstalled && (
-                <span className="text-muted-foreground text-xs">(最新)</span>
+                <span className="text-muted-foreground text-xs">{t('(最新)')}</span>
               )}
             </div>
           </DetailRow>
 
           {app.service_port ? (
-            <DetailRow icon={Network} label="服务端口">
+            <DetailRow icon={Network} label={t('服务端口')}>
               {app.service_port}
             </DetailRow>
           ) : null}
 
-          <DetailRow icon={Cpu} label="支持平台">
+          <DetailRow icon={Cpu} label={t('支持平台')}>
             {app.platform || '-'}
           </DetailRow>
 
-          <DetailRow icon={Clock} label="最近更新">
+          <DetailRow icon={Clock} label={t('最近更新')}>
             {formatDate(app.updated_at)}
           </DetailRow>
 
           {app.homepage && (
-            <DetailRow icon={Globe} label="官网">
+            <DetailRow icon={Globe} label={t('官网')}>
               <a
                 href={app.homepage}
                 target="_blank"
@@ -185,7 +193,7 @@ const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChan
           )}
 
           {app.release_url && (
-            <DetailRow icon={Tag} label="发布页">
+            <DetailRow icon={Tag} label={t('发布页')}>
               <a
                 href={app.release_url}
                 target="_blank"
@@ -201,7 +209,7 @@ const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChan
 
         <Separator />
 
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <Button
             size="sm"
             variant="ghost"
@@ -210,7 +218,7 @@ const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChan
           >
             <a href={apiUrl(`/api/apps/${app.appname}/download`)} download>
               <Download className="mr-1.5 h-3.5 w-3.5" />
-              下载 fpk
+              {t('下载 fpk')}
             </a>
           </Button>
           {isInstalled && onUninstall && (
@@ -219,11 +227,11 @@ const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChan
               variant="ghost"
               onClick={() => { onOpenChange(false); onUninstall(app); }}
               disabled={!!operation}
-              aria-label={`卸载 ${app.display_name}`}
+              aria-label={t('卸载 {name}', { name: app.display_name })}
               className="rounded-full px-4 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
             >
               <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-              卸载
+              {t('卸载')}
             </Button>
           )}
           {app.update_ignored && onUnignoreUpdate && (
@@ -234,13 +242,13 @@ const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChan
               className="rounded-full px-4 text-muted-foreground"
             >
               <Bell className="mr-1.5 h-3.5 w-3.5" />
-              取消忽略
+              {t('取消忽略')}
             </Button>
           )}
           {operation ? (
             <Button size="sm" disabled className="rounded-full px-4">
               <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              {operation.message || '处理中...'}
+              {stepText(operation.step)}
             </Button>
           ) : !isInstalled ? (
             <Button
@@ -249,7 +257,7 @@ const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChan
               className="rounded-full px-4"
             >
               <Download className="mr-1.5 h-3.5 w-3.5" />
-              安装
+              {t('安装')}
             </Button>
           ) : canUpdate ? (
             <>
@@ -261,7 +269,7 @@ const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChan
                   className="rounded-full px-4 text-muted-foreground"
                 >
                   <BellOff className="mr-1.5 h-3.5 w-3.5" />
-                  忽略更新
+                  {t('忽略更新')}
                 </Button>
               )}
               <Button
@@ -271,7 +279,7 @@ const AppDetailDialog: React.FC<AppDetailDialogProps> = ({ app, open, onOpenChan
                 className="rounded-full px-4 border-primary text-primary hover:bg-primary/10"
               >
                 <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                更新
+                {t('更新')}
               </Button>
             </>
           ) : null}

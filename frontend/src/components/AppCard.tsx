@@ -1,3 +1,5 @@
+import { InstallationType } from './InstallationType';
+import { t, useLocale, stepText } from '@/lib/i18n';
 import React from 'react';
 import type { AppInfo, AppOperation } from '../api/client';
 import { availableVersionLabel, installedVersionLabel } from '../api/client';
@@ -12,7 +14,6 @@ import {
   Package,
   Circle,
   ArrowRight,
-  Container,
   X,
   BellOff,
   Trash2,
@@ -34,6 +35,7 @@ interface AppCardProps {
 }
 
 const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, onUninstall, onCleanup, onDetail, onCancelOp, upgradeAllowed = true }) => {
+  useLocale();
   const isInstalled = app.installed;
   const canUpdate = isInstalled && app.has_update;
 
@@ -50,25 +52,12 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'running': return '运行中';
-      case 'stopped': return '已停止';
-      case 'installing': return '安装中';
-      case 'uninstalling': return '卸载中';
-      case 'updating': return '更新中';
-      default: return status || '未知';
-    }
-  };
-
-  const getStepText = (step: string): string => {
-    switch (step) {
-      case 'downloading': return '正在下载...';
-      case 'pulling': return '正在拉取镜像...';
-      case 'installing': return '正在安装...';
-      case 'verifying': return '正在验证...';
-      case 'starting': return '正在启动...';
-      case 'stopping': return '正在停止...';
-      case 'uninstalling': return '正在卸载...';
-      default: return '处理中...';
+      case 'running': return t('运行中');
+      case 'stopped': return t('已停止');
+      case 'installing': return t('安装中');
+      case 'uninstalling': return t('卸载中');
+      case 'updating': return t('更新中');
+      default: return status || t('未知');
     }
   };
 
@@ -100,25 +89,23 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
                 <h3 className="font-semibold text-sm leading-tight text-foreground truncate" title={app.display_name}>
                   {app.display_name}
                 </h3>
-                {app.app_type === 'docker' && (
-                  <Container className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                )}
               </div>
               {canUpdate && (
                 <Badge variant="secondary" className="bg-primary/10 text-primary border-0 font-medium px-1.5 h-5 text-[11px] shrink-0 rounded-full">
-                  有更新
+                  {t('有更新')}
                 </Badge>
               )}
               {app.update_ignored && (
                 <Badge variant="secondary" className="bg-muted text-muted-foreground border-0 font-medium px-1.5 h-5 text-[11px] shrink-0 rounded-full gap-0.5">
                   <BellOff className="h-2.5 w-2.5" />
-                  已忽略
+                  {t('已忽略')}
                 </Badge>
               )}
             </div>
 
             <div className="flex items-center flex-wrap gap-x-1.5 text-xs text-muted-foreground">
               <span>v{isInstalled ? installedVersionLabel(app) : app.latest_version}</span>
+              <InstallationType appType={app.app_type} />
               {canUpdate && (
                 <>
                   <ArrowRight className="h-3 w-3 text-muted-foreground/50" />
@@ -144,7 +131,7 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
           <p
             className="text-xs text-muted-foreground line-clamp-2 leading-relaxed cursor-pointer hover:text-foreground transition-colors"
             onClick={() => onDetail?.(app)}
-            title="点击查看详情"
+            title={t('点击查看详情')}
           >
             {app.description}
           </p>
@@ -158,7 +145,7 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
             
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
-                <span className="shrink-0">{getStepText(operation.step)}</span>
+                <span className="shrink-0">{stepText(operation.step)}</span>
                 {operation.step === 'downloading' && operation.speed != null && operation.speed > 0 ? (
                   <>
                     <span className="shrink-0">{formatSpeed(operation.speed)}</span>
@@ -175,7 +162,7 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
                 <button
                   onClick={() => onCancelOp?.(app)}
                   className="shrink-0 p-0.5 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                  title="取消"
+                  title={t('取消')}
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -193,7 +180,7 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
                  </div>
                ) : (
                  <span className="text-xs text-muted-foreground/50">
-                   未安装
+                   {t('未安装')}
                  </span>
                )}
             </div>
@@ -205,8 +192,8 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
                   variant="ghost"
                   onClick={() => onCleanup(app)}
                   disabled={!!operation}
-                  aria-label={`清理残留 ${app.display_name}`}
-                  title="清理残留（应用中心已丢失注册，卸载会失败时使用）"
+                  aria-label={t('清理残留 {name}', { name: app.display_name })}
+                  title={t('清理残留（应用中心已丢失注册，卸载会失败时使用）')}
                   className="rounded-full h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                 >
                   <Eraser className="h-3.5 w-3.5" />
@@ -218,8 +205,8 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
                   variant="ghost"
                   onClick={() => onUninstall(app)}
                   disabled={!!operation}
-                  aria-label={`卸载 ${app.display_name}`}
-                  title="卸载"
+                  aria-label={t('卸载 {name}', { name: app.display_name })}
+                  title={t('卸载')}
                   className="rounded-full h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -232,7 +219,7 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
                   className="rounded-full px-3.5 h-7 text-xs font-medium"
                 >
                   <Download className="mr-1 h-3.5 w-3.5" />
-                  安装
+                  {t('安装')}
                 </Button>
               ) : canUpdate ? (
                 <Button
@@ -240,11 +227,11 @@ const AppCard: React.FC<AppCardProps> = ({ app, operation, onInstall, onUpdate, 
                   onClick={() => onUpdate(app)}
                   variant="outline"
                   disabled={!upgradeAllowed}
-                  title={upgradeAllowed ? undefined : '当前 fnOS 版本的更新通道会删除应用数据，请在系统应用中心手动安装 fpk'}
+                  title={upgradeAllowed ? undefined : t('当前 fnOS 版本的更新通道会删除应用数据，请在系统应用中心手动安装 fpk')}
                   className="rounded-full px-3.5 h-7 text-xs font-medium border-primary text-primary hover:bg-primary/10 disabled:border-muted disabled:text-muted-foreground"
                 >
                   <RefreshCw className="mr-1 h-3.5 w-3.5" />
-                  {upgradeAllowed ? '更新' : '需手动更新'}
+                  {upgradeAllowed ? t('更新') : t('需手动更新')}
                 </Button>
               ) : null}
             </div>
